@@ -78,14 +78,16 @@ swift build -c release \
   --product micbridge-capture-fixture \
   --product micbridge-fixture-validate >/dev/null
 
+BIN_DIR="$(swift build -c release --show-bin-path)"
+
 echo "[package-release] Building HAL driver bundle"
 "$ROOT_DIR/drivers/micbridge-hal/scripts/build-driver.sh" >/dev/null
 
-cp "$ROOT_DIR/.build/release/micbridge-daemon" "$STAGE_DIR/bin/"
-cp "$ROOT_DIR/.build/release/micbridge-menubar" "$STAGE_DIR/bin/"
-cp "$ROOT_DIR/.build/release/micbridge-audio-e2e-validate" "$STAGE_DIR/bin/"
-cp "$ROOT_DIR/.build/release/micbridge-capture-fixture" "$STAGE_DIR/bin/"
-cp "$ROOT_DIR/.build/release/micbridge-fixture-validate" "$STAGE_DIR/bin/"
+cp "$BIN_DIR/micbridge-daemon" "$STAGE_DIR/bin/"
+cp "$BIN_DIR/micbridge-menubar" "$STAGE_DIR/bin/"
+cp "$BIN_DIR/micbridge-audio-e2e-validate" "$STAGE_DIR/bin/"
+cp "$BIN_DIR/micbridge-capture-fixture" "$STAGE_DIR/bin/"
+cp "$BIN_DIR/micbridge-fixture-validate" "$STAGE_DIR/bin/"
 cp -R "$ROOT_DIR/drivers/micbridge-hal/build/MicBridge.driver" "$STAGE_DIR/driver/"
 
 cp "$ROOT_DIR/README.md" "$STAGE_DIR/docs/"
