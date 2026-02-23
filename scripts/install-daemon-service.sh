@@ -38,6 +38,11 @@ cat > "$PLIST_PATH" <<PLIST
   <string>$STDERR_LOG</string>
   <key>WorkingDirectory</key>
   <string>$ROOT_DIR</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MICBRIDGE_LOG_STDOUT</key>
+    <string>0</string>
+  </dict>
 </dict>
 </plist>
 PLIST

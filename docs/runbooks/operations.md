@@ -69,8 +69,12 @@ How to install, run, validate, and recover the local stack.
   - `~/Library/Application Support/MacVirtualMicBridge/status.json`
 - Runtime binaries:
   - `~/Library/Application Support/MacVirtualMicBridge/bin/current`
-- Log file:
+- Log files (auto-rotated, 5 MiB each, 4 archives kept):
   - `~/Library/Logs/MacVirtualMicBridge/daemon.log`
+  - `~/Library/Logs/MacVirtualMicBridge/menubar.log`
+  - Archives: `*.log.1` .. `*.log.4`
+- Collect support bundle (config + status + logs + launchd diagnostics):
+  - `./scripts/collect-support-bundle.sh`
 
 ## Optional Git Hook
 
@@ -119,3 +123,5 @@ If audio routing behaves incorrectly after sleep/wake or device changes:
 
 5. If issue persists, capture fixture for regression work
 - `./scripts/capture-fixture.sh incident_<short_name>`
+6. For maintainer handoff, generate support bundle
+- `./scripts/collect-support-bundle.sh`

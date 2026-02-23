@@ -68,6 +68,8 @@ Ship a resilient virtual mic bridge that survives sleep/wake, USB reconnects, an
   - `./scripts/check-release-assets.sh v<version>`
 - Capture a bug fixture from current machine:
   - `./scripts/capture-fixture.sh <name>`
+- Collect support bundle (status/config/logs + launchd diagnostics):
+  - `./scripts/collect-support-bundle.sh`
 - Build all:
   - `./scripts/build-all.sh`
 - Install runtime binaries:

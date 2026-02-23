@@ -88,10 +88,8 @@ public enum DeviceSelectionPolicy {
             return nil
         }
 
-        if let configuredUID,
-           let configured = inputs.first(where: { $0.uid == configuredUID })
-        {
-            return configured
+        if let configuredUID {
+            return inputs.first(where: { $0.uid == configuredUID })
         }
 
         if let defaultInputUID,

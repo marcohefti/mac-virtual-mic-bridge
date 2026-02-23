@@ -294,7 +294,12 @@ Optional pre-commit hook (`./scripts/validate.sh` on commit):
 - config/status: `~/Library/Application Support/MacVirtualMicBridge`
 - runtime binaries: `~/Library/Application Support/MacVirtualMicBridge/bin/current`
 - updater lock: `~/Library/Application Support/MacVirtualMicBridge/update.lock`
-- logs: `~/Library/Logs/MacVirtualMicBridge/daemon.log`
+- logs (auto-rotated, 5 MiB each, 4 archives kept):
+  - `~/Library/Logs/MacVirtualMicBridge/daemon.log`
+  - `~/Library/Logs/MacVirtualMicBridge/menubar.log`
+  - archives: `*.log.1` .. `*.log.4`
+- support bundle for maintainer triage:
+  - `./scripts/collect-support-bundle.sh`
 
 ## Current Phase
 

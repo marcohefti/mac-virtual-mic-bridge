@@ -30,7 +30,7 @@ When a bug is found:
 - Purpose: lock selection/recovery behavior independent of machine state.
 
 Current assertions include:
-- Missing source UID falls back to default input.
+- Missing configured source UID returns no source (daemon waits for that selected device to come back).
 - Missing target UID falls back to preferred virtual mic name.
 - Without preferred target, MicBridge UID/name is preferred over random outputs.
 - Deterministic fallback when no virtual target exists.

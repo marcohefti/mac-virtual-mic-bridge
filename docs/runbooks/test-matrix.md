@@ -37,7 +37,8 @@
 
 ## Observability
 - Status: `~/Library/Application Support/MacVirtualMicBridge/status.json`
-- Log: `~/Library/Logs/MacVirtualMicBridge/daemon.log`
+- Logs: `~/Library/Logs/MacVirtualMicBridge/daemon.log`, `~/Library/Logs/MacVirtualMicBridge/menubar.log`
+- Support bundle: `./scripts/collect-support-bundle.sh`
 
 ## Exit Criteria
 - No daemon crash in 8h soak.

@@ -43,6 +43,8 @@ cat > "$PLIST_PATH" <<PLIST
   <dict>
     <key>MICBRIDGE_REPO_ROOT</key>
     <string>$ROOT_DIR</string>
+    <key>MICBRIDGE_LOG_STDOUT</key>
+    <string>0</string>
   </dict>
 </dict>
 </plist>

@@ -8,12 +8,12 @@
     "expectedUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2"
   },
   {
-    "name": "source_missing_uid_falls_back_to_default",
+    "name": "source_missing_uid_returns_nil",
     "fixture": "multi_driver_devices",
     "kind": "source",
     "configuredUID": "missing-device-uid",
     "defaultInputUID": "AppleHDAEngineInput:1B,0,1,0:1",
-    "expectedUID": "AppleHDAEngineInput:1B,0,1,0:1"
+    "expectedUID": null
   },
   {
     "name": "target_configured_uid_selected",

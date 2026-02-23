@@ -4,6 +4,12 @@ import Darwin
 import Foundation
 
 final class MenuBarController: NSObject, NSApplicationDelegate {
+    private enum SelectedInputAvailability {
+        case automatic
+        case online(name: String)
+        case offline(uid: String)
+    }
+
     private let configStore = BridgeConfigStore()
     private let statusStore = BridgeStatusStore()
 
@@ -69,7 +75,12 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private func rebuildMenu() {
         let menu = NSMenu()
         let status = statusStore.load()
-        updateStatusItemAppearance(daemonState: status?.state, bridgeEnabled: config.enabled)
+        let inputAvailability = selectedInputAvailability()
+        updateStatusItemAppearance(
+            daemonState: status?.state,
+            bridgeEnabled: config.enabled,
+            inputAvailability: inputAvailability
+        )
 
         let routeItem = NSMenuItem(
             title: "\(currentInputName()) -> \(config.virtualMicrophoneName)",
@@ -78,6 +89,10 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         )
         routeItem.isEnabled = false
         menu.addItem(routeItem)
+
+        let selectedInputStatusItem = NSMenuItem(title: selectedInputStatusText(inputAvailability), action: nil, keyEquivalent: "")
+        selectedInputStatusItem.isEnabled = false
+        menu.addItem(selectedInputStatusItem)
 
         menu.addItem(.separator())
 
@@ -163,10 +178,35 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     }
 
     private func currentInputName() -> String {
-        guard let sourceUID = config.sourceDeviceUID else {
+        switch selectedInputAvailability() {
+        case .automatic:
             return "Auto Input"
+        case let .online(name):
+            return name
+        case .offline:
+            return "Unavailable Input"
         }
-        return inputDevices.first(where: { $0.uid == sourceUID })?.name ?? "Unavailable Input"
+    }
+
+    private func selectedInputAvailability() -> SelectedInputAvailability {
+        guard let sourceUID = config.sourceDeviceUID else {
+            return .automatic
+        }
+        if let device = inputDevices.first(where: { $0.uid == sourceUID }) {
+            return .online(name: device.name)
+        }
+        return .offline(uid: sourceUID)
+    }
+
+    private func selectedInputStatusText(_ availability: SelectedInputAvailability) -> String {
+        switch availability {
+        case .automatic:
+            return "Input status: ⚪ Auto (default input)"
+        case let .online(name):
+            return "Input status: 🟢 Online (\(name))"
+        case .offline:
+            return "Input status: 🔴 Offline (waiting for selected device)"
+        }
     }
 
     private func persistConfigAndSignalDaemon() {
@@ -194,45 +234,43 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         return pid
     }
 
-    private func updateStatusItemAppearance(daemonState: BridgeRuntimeState?, bridgeEnabled: Bool) {
+    private func updateStatusItemAppearance(
+        daemonState: BridgeRuntimeState?,
+        bridgeEnabled: Bool,
+        inputAvailability: SelectedInputAvailability
+    ) {
         guard let button = statusItem.button else { return }
 
-        let symbolName: String
+        let indicator: String
         let tooltip: String
-        switch daemonState {
-        case .running where bridgeEnabled:
-            symbolName = "mic.circle.fill"
-            tooltip = "MicBridge: Running"
-        case .running:
-            symbolName = "mic.circle"
-            tooltip = "MicBridge: Running (Bridge Disabled)"
-        case .starting, .restarting:
-            symbolName = "clock.fill"
-            tooltip = "MicBridge: Starting"
-        case .error:
-            symbolName = "exclamationmark.triangle.fill"
-            tooltip = "MicBridge: Error"
-        case .stopped:
-            symbolName = "mic.slash.circle.fill"
-            tooltip = "MicBridge: Stopped"
-        case .none:
-            symbolName = "mic.slash.circle.fill"
-            tooltip = "MicBridge: Unknown"
+        if bridgeEnabled, case .offline = inputAvailability {
+            indicator = "🔴"
+            tooltip = "MicBridge: Selected input offline (waiting for reconnect)"
+        } else {
+            switch daemonState {
+            case .running where bridgeEnabled:
+                indicator = "🟢"
+                tooltip = "MicBridge: Running"
+            case .running:
+                indicator = "⚪"
+                tooltip = "MicBridge: Running (Bridge Disabled)"
+            case .starting, .restarting:
+                indicator = "🟡"
+                tooltip = "MicBridge: Recovering"
+            case .error:
+                indicator = "🔴"
+                tooltip = "MicBridge: Error"
+            case .stopped:
+                indicator = "⚪"
+                tooltip = "MicBridge: Stopped"
+            case .none:
+                indicator = "⚪"
+                tooltip = "MicBridge: Unknown"
+            }
         }
 
-        if var image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "MicBridge") {
-            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-            if let configured = image.withSymbolConfiguration(config) {
-                image = configured
-            }
-            image.isTemplate = true
-            button.image = image
-            button.imagePosition = .imageOnly
-            button.title = ""
-        } else {
-            button.image = nil
-            button.title = ""
-        }
+        button.image = nil
+        button.title = indicator
         button.toolTip = tooltip
     }
 

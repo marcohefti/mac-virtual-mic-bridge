@@ -17,6 +17,7 @@ public struct BridgePaths {
     public static let statusPath = appSupportDir.appendingPathComponent("status.json")
     public static let pidPath = appSupportDir.appendingPathComponent("daemon.pid")
     public static let daemonLogPath = logsDir.appendingPathComponent("daemon.log")
+    public static let menubarLogPath = logsDir.appendingPathComponent("menubar.log")
 
     public static func ensureDirectories() throws {
         try FileManager.default.createDirectory(at: appSupportDir, withIntermediateDirectories: true)

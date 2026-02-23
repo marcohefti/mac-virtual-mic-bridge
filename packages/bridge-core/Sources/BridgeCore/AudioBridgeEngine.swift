@@ -52,14 +52,12 @@ public final class AudioBridgeEngine {
             defaultInputUID: defaultInput?.uid,
             devices: devices
         ) else {
+            if let configuredSourceUID = config.sourceDeviceUID {
+                throw CoreAudioError.notFound(
+                    "Configured source device unavailable: \(configuredSourceUID). Waiting for selected input to reconnect."
+                )
+            }
             throw CoreAudioError.notFound("No input device available for bridge source")
-        }
-
-        if let configuredSourceUID = config.sourceDeviceUID, configuredSourceUID != chosenSource.uid {
-            BridgeLogger.log(
-                .warning,
-                "Configured source device UID not found (\(configuredSourceUID)). Falling back to \(chosenSource.name)."
-            )
         }
 
         guard let chosenTarget = DeviceSelectionPolicy.selectTargetDevice(
