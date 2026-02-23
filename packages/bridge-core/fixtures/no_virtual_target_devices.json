@@ -1,0 +1,38 @@
+[
+  {
+    "id": 201,
+    "uid": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+    "name": "Audient iD14",
+    "inputChannels": 12,
+    "outputChannels": 6,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  },
+  {
+    "id": 202,
+    "uid": "AppleHDAEngineOutput:1B,0,1,1:0",
+    "name": "MacBook Pro Speakers",
+    "inputChannels": 0,
+    "outputChannels": 2,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  },
+  {
+    "id": 203,
+    "uid": "displayport.monitor.audio",
+    "name": "AW3423DWF",
+    "inputChannels": 0,
+    "outputChannels": 2,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  },
+  {
+    "id": 204,
+    "uid": "builtin.mic",
+    "name": "MacBook Pro Microphone",
+    "inputChannels": 1,
+    "outputChannels": 0,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  }
+]

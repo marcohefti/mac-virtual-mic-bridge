@@ -1,0 +1,48 @@
+[
+  {
+    "name": "source_configured_uid_selected",
+    "fixture": "multi_driver_devices",
+    "kind": "source",
+    "configuredUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+    "defaultInputUID": "AppleHDAEngineInput:1B,0,1,0:1",
+    "expectedUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2"
+  },
+  {
+    "name": "source_missing_uid_falls_back_to_default",
+    "fixture": "multi_driver_devices",
+    "kind": "source",
+    "configuredUID": "missing-device-uid",
+    "defaultInputUID": "AppleHDAEngineInput:1B,0,1,0:1",
+    "expectedUID": "AppleHDAEngineInput:1B,0,1,0:1"
+  },
+  {
+    "name": "target_configured_uid_selected",
+    "fixture": "multi_driver_devices",
+    "kind": "target",
+    "configuredUID": "ch.hefti.micbridge.virtualmic.device",
+    "preferredVirtualMicName": "MicBridge Virtual Mic",
+    "expectedUID": "ch.hefti.micbridge.virtualmic.device"
+  },
+  {
+    "name": "target_missing_uid_falls_back_to_preferred_name",
+    "fixture": "multi_driver_devices",
+    "kind": "target",
+    "configuredUID": "missing-target-uid",
+    "preferredVirtualMicName": "MicBridge Virtual Mic",
+    "expectedUID": "ch.hefti.micbridge.virtualmic.device"
+  },
+  {
+    "name": "target_without_preferences_still_prefers_micbridge",
+    "fixture": "multi_driver_devices",
+    "kind": "target",
+    "expectedUID": "ch.hefti.micbridge.virtualmic.device"
+  },
+  {
+    "name": "target_without_virtual_device_falls_back_deterministically",
+    "fixture": "no_virtual_target_devices",
+    "kind": "target",
+    "configuredUID": "missing-target-uid",
+    "preferredVirtualMicName": "MicBridge Virtual Mic",
+    "expectedUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2"
+  }
+]

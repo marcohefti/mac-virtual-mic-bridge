@@ -1,0 +1,56 @@
+[
+  {
+    "id": 101,
+    "uid": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+    "name": "Audient iD14",
+    "inputChannels": 12,
+    "outputChannels": 6,
+    "nominalSampleRate": 44100,
+    "isAlive": true
+  },
+  {
+    "id": 102,
+    "uid": "ch.hefti.micbridge.virtualmic.device",
+    "name": "MicBridge Virtual Mic",
+    "inputChannels": 1,
+    "outputChannels": 1,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  },
+  {
+    "id": 103,
+    "uid": "com.voicemod.virtual-device",
+    "name": "Voicemod Microphone",
+    "inputChannels": 2,
+    "outputChannels": 2,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  },
+  {
+    "id": 104,
+    "uid": "com.existentialaudio.blackhole.2ch",
+    "name": "BlackHole 2ch",
+    "inputChannels": 2,
+    "outputChannels": 2,
+    "nominalSampleRate": 44100,
+    "isAlive": true
+  },
+  {
+    "id": 105,
+    "uid": "AppleHDAEngineOutput:1B,0,1,1:0",
+    "name": "MacBook Pro Speakers",
+    "inputChannels": 0,
+    "outputChannels": 2,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  },
+  {
+    "id": 106,
+    "uid": "AppleHDAEngineInput:1B,0,1,0:1",
+    "name": "MacBook Pro Microphone",
+    "inputChannels": 1,
+    "outputChannels": 0,
+    "nominalSampleRate": 48000,
+    "isAlive": true
+  }
+]

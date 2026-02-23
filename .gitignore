@@ -1,0 +1,7 @@
+.build/
+.DS_Store
+.swiftpm/
+run/
+drivers/micbridge-hal/build/
+tmp/agentic-engineering-review/
+dist/
