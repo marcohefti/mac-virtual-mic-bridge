@@ -103,14 +103,25 @@ resolve_binary_path() {
   return 1
 }
 
+copy_resolved_binary() {
+  local name="$1"
+  local source_path
+  source_path="$(resolve_binary_path "$name" || true)"
+  if [[ -z "$source_path" || ! -f "$source_path" ]]; then
+    echo "Could not resolve built binary: $name" >&2
+    exit 1
+  fi
+  cp "$source_path" "$STAGE_DIR/bin/"
+}
+
 echo "[package-release] Building HAL driver bundle"
 "$ROOT_DIR/drivers/micbridge-hal/scripts/build-driver.sh" >/dev/null
 
-cp "$(resolve_binary_path micbridge-daemon)" "$STAGE_DIR/bin/"
-cp "$(resolve_binary_path micbridge-menubar)" "$STAGE_DIR/bin/"
-cp "$(resolve_binary_path micbridge-audio-e2e-validate)" "$STAGE_DIR/bin/"
-cp "$(resolve_binary_path micbridge-capture-fixture)" "$STAGE_DIR/bin/"
-cp "$(resolve_binary_path micbridge-fixture-validate)" "$STAGE_DIR/bin/"
+copy_resolved_binary "micbridge-daemon"
+copy_resolved_binary "micbridge-menubar"
+copy_resolved_binary "micbridge-audio-e2e-validate"
+copy_resolved_binary "micbridge-capture-fixture"
+copy_resolved_binary "micbridge-fixture-validate"
 cp -R "$ROOT_DIR/drivers/micbridge-hal/build/MicBridge.driver" "$STAGE_DIR/driver/"
 
 cp "$ROOT_DIR/README.md" "$STAGE_DIR/docs/"
