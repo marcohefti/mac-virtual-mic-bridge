@@ -70,19 +70,10 @@ mkdir -p "$STAGE_DIR/bin" "$STAGE_DIR/driver" "$STAGE_DIR/docs"
 
 cd "$ROOT_DIR"
 
-echo "[package-release] Building Swift release binaries"
-swift build -c release \
-  --product micbridge-daemon \
-  --product micbridge-menubar \
-  --product micbridge-audio-e2e-validate \
-  --product micbridge-capture-fixture \
-  --product micbridge-fixture-validate >/dev/null
-
-BIN_DIR="$(swift build -c release --show-bin-path)"
-
 resolve_binary_path() {
   local name="$1"
-  local candidate="$BIN_DIR/$name"
+  local bin_dir="$2"
+  local candidate="$bin_dir/$name"
   if [[ -e "$candidate" ]]; then
     echo "$candidate"
     return 0
@@ -111,25 +102,36 @@ resolve_binary_path() {
 
 copy_resolved_binary() {
   local name="$1"
+  local bin_dir="$2"
   local source_path
-  source_path="$(resolve_binary_path "$name" || true)"
+  source_path="$(resolve_binary_path "$name" "$bin_dir" || true)"
   if [[ -z "$source_path" || ! -e "$source_path" ]]; then
     echo "Could not resolve built binary: $name" >&2
-    echo "Searched bin dir: $BIN_DIR" >&2
+    echo "Searched bin dir: $bin_dir" >&2
     find "$ROOT_DIR/.build" -maxdepth 5 -name "$name" -print >&2 || true
     exit 1
   fi
   cp "$source_path" "$STAGE_DIR/bin/"
 }
 
+build_and_copy_binary() {
+  local name="$1"
+  local bin_dir
+  swift build -c release --product "$name" >/dev/null
+  bin_dir="$(swift build -c release --product "$name" --show-bin-path)"
+  copy_resolved_binary "$name" "$bin_dir"
+}
+
+echo "[package-release] Building Swift release binaries"
+build_and_copy_binary "micbridge-daemon"
+build_and_copy_binary "micbridge-menubar"
+build_and_copy_binary "micbridge-audio-e2e-validate"
+build_and_copy_binary "micbridge-capture-fixture"
+build_and_copy_binary "micbridge-fixture-validate"
+
 echo "[package-release] Building HAL driver bundle"
 "$ROOT_DIR/drivers/micbridge-hal/scripts/build-driver.sh" >/dev/null
 
-copy_resolved_binary "micbridge-daemon"
-copy_resolved_binary "micbridge-menubar"
-copy_resolved_binary "micbridge-audio-e2e-validate"
-copy_resolved_binary "micbridge-capture-fixture"
-copy_resolved_binary "micbridge-fixture-validate"
 cp -R "$ROOT_DIR/drivers/micbridge-hal/build/MicBridge.driver" "$STAGE_DIR/driver/"
 
 cp "$ROOT_DIR/README.md" "$STAGE_DIR/docs/"
