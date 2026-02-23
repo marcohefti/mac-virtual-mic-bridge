@@ -83,19 +83,25 @@ BIN_DIR="$(swift build -c release --show-bin-path)"
 resolve_binary_path() {
   local name="$1"
   local candidate="$BIN_DIR/$name"
-  if [[ -f "$candidate" ]]; then
+  if [[ -e "$candidate" ]]; then
     echo "$candidate"
     return 0
   fi
 
   candidate="$ROOT_DIR/.build/release/$name"
-  if [[ -f "$candidate" ]]; then
+  if [[ -e "$candidate" ]]; then
     echo "$candidate"
     return 0
   fi
 
-  candidate="$(find "$ROOT_DIR/.build" -type f -path "*/release/$name" 2>/dev/null | head -n 1 || true)"
-  if [[ -n "$candidate" && -f "$candidate" ]]; then
+  candidate="$(find "$ROOT_DIR/.build" -path "*/release/$name" -print 2>/dev/null | head -n 1 || true)"
+  if [[ -n "$candidate" && -e "$candidate" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  candidate="$(find "$ROOT_DIR/.build" -name "$name" -perm -111 -print 2>/dev/null | head -n 1 || true)"
+  if [[ -n "$candidate" && -e "$candidate" ]]; then
     echo "$candidate"
     return 0
   fi
@@ -107,8 +113,10 @@ copy_resolved_binary() {
   local name="$1"
   local source_path
   source_path="$(resolve_binary_path "$name" || true)"
-  if [[ -z "$source_path" || ! -f "$source_path" ]]; then
+  if [[ -z "$source_path" || ! -e "$source_path" ]]; then
     echo "Could not resolve built binary: $name" >&2
+    echo "Searched bin dir: $BIN_DIR" >&2
+    find "$ROOT_DIR/.build" -maxdepth 5 -name "$name" -print >&2 || true
     exit 1
   fi
   cp "$source_path" "$STAGE_DIR/bin/"
