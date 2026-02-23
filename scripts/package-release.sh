@@ -80,14 +80,37 @@ swift build -c release \
 
 BIN_DIR="$(swift build -c release --show-bin-path)"
 
+resolve_binary_path() {
+  local name="$1"
+  local candidate="$BIN_DIR/$name"
+  if [[ -f "$candidate" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  candidate="$ROOT_DIR/.build/release/$name"
+  if [[ -f "$candidate" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  candidate="$(find "$ROOT_DIR/.build" -type f -path "*/release/$name" 2>/dev/null | head -n 1 || true)"
+  if [[ -n "$candidate" && -f "$candidate" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+
+  return 1
+}
+
 echo "[package-release] Building HAL driver bundle"
 "$ROOT_DIR/drivers/micbridge-hal/scripts/build-driver.sh" >/dev/null
 
-cp "$BIN_DIR/micbridge-daemon" "$STAGE_DIR/bin/"
-cp "$BIN_DIR/micbridge-menubar" "$STAGE_DIR/bin/"
-cp "$BIN_DIR/micbridge-audio-e2e-validate" "$STAGE_DIR/bin/"
-cp "$BIN_DIR/micbridge-capture-fixture" "$STAGE_DIR/bin/"
-cp "$BIN_DIR/micbridge-fixture-validate" "$STAGE_DIR/bin/"
+cp "$(resolve_binary_path micbridge-daemon)" "$STAGE_DIR/bin/"
+cp "$(resolve_binary_path micbridge-menubar)" "$STAGE_DIR/bin/"
+cp "$(resolve_binary_path micbridge-audio-e2e-validate)" "$STAGE_DIR/bin/"
+cp "$(resolve_binary_path micbridge-capture-fixture)" "$STAGE_DIR/bin/"
+cp "$(resolve_binary_path micbridge-fixture-validate)" "$STAGE_DIR/bin/"
 cp -R "$ROOT_DIR/drivers/micbridge-hal/build/MicBridge.driver" "$STAGE_DIR/driver/"
 
 cp "$ROOT_DIR/README.md" "$STAGE_DIR/docs/"
