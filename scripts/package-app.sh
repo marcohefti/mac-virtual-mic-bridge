@@ -22,7 +22,7 @@ APP_NAME="MicBridge"
 BUNDLE_ID="ch.hefti.macvirtualmicbridge.menubar"
 SIGN_APP=1
 CREATE_ZIP=1
-REPO_ROOT_VALUE="$ROOT_DIR"
+REPO_ROOT_VALUE=""
 REPO_SLUG_VALUE=""
 
 usage() {
@@ -134,6 +134,24 @@ cp "$BIN_PATH" "$APP_BUNDLE_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 chmod +x "$APP_BUNDLE_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 
 APP_COPYRIGHT="© 2026 MicBridge"
+REPO_ROOT_PLIST_ENTRY=""
+REPO_SLUG_PLIST_ENTRY=""
+
+if [[ -n "${REPO_ROOT_VALUE:-}" ]]; then
+  REPO_ROOT_PLIST_ENTRY=$(cat <<EOF
+  <key>MicBridgeRepoRoot</key>
+  <string>${REPO_ROOT_VALUE}</string>
+EOF
+)
+fi
+
+if [[ -n "${REPO_SLUG_VALUE:-}" ]]; then
+  REPO_SLUG_PLIST_ENTRY=$(cat <<EOF
+  <key>MicBridgeRepoSlug</key>
+  <string>${REPO_SLUG_VALUE}</string>
+EOF
+)
+fi
 
 cat > "$APP_BUNDLE_PATH/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -160,10 +178,8 @@ cat > "$APP_BUNDLE_PATH/Contents/Info.plist" <<PLIST
   <true/>
   <key>NSHumanReadableCopyright</key>
   <string>${APP_COPYRIGHT}</string>
-  <key>MicBridgeRepoRoot</key>
-  <string>${REPO_ROOT_VALUE}</string>
-  <key>MicBridgeRepoSlug</key>
-  <string>${REPO_SLUG_VALUE}</string>
+${REPO_ROOT_PLIST_ENTRY}
+${REPO_SLUG_PLIST_ENTRY}
 </dict>
 </plist>
 PLIST

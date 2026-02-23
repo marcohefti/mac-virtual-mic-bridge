@@ -110,6 +110,9 @@ TAG="v${MARKETING_VERSION}"
 ARCHIVE_NAME="${ARTIFACT_PREFIX}-${MARKETING_VERSION}-macos.tar.gz"
 ARCHIVE_PATH="$OUTPUT_DIR/$ARCHIVE_NAME"
 SHA_PATH="${ARCHIVE_PATH}.sha256"
+APP_ZIP_NAME="MicBridge-${MARKETING_VERSION}.zip"
+APP_ZIP_PATH="$OUTPUT_DIR/$APP_ZIP_NAME"
+APP_ZIP_SHA_PATH="${APP_ZIP_PATH}.sha256"
 
 cd "$ROOT_DIR"
 
@@ -124,12 +127,15 @@ if [[ "$SKIP_VALIDATE" -eq 0 ]]; then
 fi
 
 ./scripts/package-release.sh --output-dir "$OUTPUT_DIR" --artifact-prefix "$ARTIFACT_PREFIX"
+./scripts/package-cask-assets.sh --output-dir "$OUTPUT_DIR"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "[release] Dry run complete."
   echo "[release] Artifacts:"
   echo "  $ARCHIVE_PATH"
   echo "  $SHA_PATH"
+  echo "  $APP_ZIP_PATH"
+  echo "  $APP_ZIP_SHA_PATH"
   exit 0
 fi
 
@@ -159,6 +165,8 @@ fi
 gh release create "$TAG" \
   "$ARCHIVE_PATH" \
   "$SHA_PATH" \
+  "$APP_ZIP_PATH" \
+  "$APP_ZIP_SHA_PATH" \
   --title "MicBridge ${MARKETING_VERSION}" \
   --notes-file "$NOTES_FILE" \
   "${DRAFT_FLAG[@]}"

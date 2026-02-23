@@ -89,12 +89,16 @@ How to install, run, validate, and recover the local stack.
   - `./scripts/package-release.sh`
 - Package internal ad-hoc signed app bundle:
   - `./scripts/package-app.sh`
+- Package cask app assets (app zip + checksum):
+  - `./scripts/package-cask-assets.sh`
 - Create draft GitHub release:
   - `./scripts/release.sh`
 - Dry-run release (no GitHub release):
   - `./scripts/release.sh --dry-run`
 - Verify release assets:
   - `./scripts/check-release-assets.sh v<version>`
+- Publish/update private tap cask:
+  - `./scripts/publish-homebrew-cask.sh`
 - Apply internal in-place update (download + checksum + rollback-safe binary replacement):
   - `./scripts/internal-update.sh --version <version> --repo <owner/repo>`
 - Apply internal update and install bundled driver (requires sudo):

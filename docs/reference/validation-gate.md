@@ -59,6 +59,10 @@
 - Validates internal updater success path from local release artifact.
 - Validates checksum failure path preserves the active runtime symlink (no partial switch).
 
+9. Cask app packaging smoke
+- Executes `scripts/package-cask-assets.sh` via `scripts/validate-release-artifacts.sh`.
+- Verifies `MicBridge-<version>.zip` and `.sha256` are generated for Homebrew cask distribution.
+
 ## Policy
 
 - Every completed coding task should end with `./scripts/validate.sh`.

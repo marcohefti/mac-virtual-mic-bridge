@@ -149,6 +149,31 @@ Uninstall:
 sudo ./scripts/uninstall-driver.sh
 ```
 
+## Install via Homebrew Cask (Private Tap)
+
+Install MicBridge into `/Applications` from the private tap:
+
+```bash
+brew tap marcohefti/homebrew-micbridge
+brew install --cask marcohefti/homebrew-micbridge/micbridge
+```
+
+Upgrade:
+
+```bash
+brew upgrade --cask marcohefti/homebrew-micbridge/micbridge
+```
+
+Uninstall:
+
+```bash
+brew uninstall --cask marcohefti/homebrew-micbridge/micbridge
+```
+
+Note:
+- This tap is private to the MicBridge project (not Homebrew core).
+- Unsigned builds may require first-launch approval in `System Settings > Privacy & Security`.
+
 ## Run
 
 ```bash
@@ -277,10 +302,22 @@ Create internal ad-hoc signed app bundle:
 ./scripts/package-app.sh
 ```
 
+Build app zip + checksum assets used by Homebrew cask releases:
+
+```bash
+./scripts/package-cask-assets.sh
+```
+
 Verify release assets on GitHub:
 
 ```bash
 ./scripts/check-release-assets.sh v<version>
+```
+
+Publish/update the private tap cask to the latest release:
+
+```bash
+./scripts/publish-homebrew-cask.sh
 ```
 
 Optional pre-commit hook (`./scripts/validate.sh` on commit):

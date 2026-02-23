@@ -62,10 +62,14 @@ Ship a resilient virtual mic bridge that survives sleep/wake, USB reconnects, an
   - `./scripts/package-release.sh`
 - Package internal ad-hoc app bundle:
   - `./scripts/package-app.sh`
+- Package cask app assets (zip + checksum):
+  - `./scripts/package-cask-assets.sh`
 - Create GitHub release:
   - `./scripts/release.sh`
 - Verify release assets:
   - `./scripts/check-release-assets.sh v<version>`
+- Publish/update private tap cask:
+  - `./scripts/publish-homebrew-cask.sh`
 - Capture a bug fixture from current machine:
   - `./scripts/capture-fixture.sh <name>`
 - Collect support bundle (status/config/logs + launchd diagnostics):

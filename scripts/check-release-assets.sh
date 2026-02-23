@@ -9,6 +9,8 @@ ARTIFACT_PREFIX="${2:-MicBridge}"
 
 ARCHIVE_NAME="${ARTIFACT_PREFIX}-${MARKETING_VERSION}-macos.tar.gz"
 SHA_NAME="${ARCHIVE_NAME}.sha256"
+APP_ZIP_NAME="MicBridge-${MARKETING_VERSION}.zip"
+APP_ZIP_SHA_NAME="${APP_ZIP_NAME}.sha256"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "gh CLI is required" >&2
@@ -31,6 +33,18 @@ if ! echo "$ASSET_NAMES" | grep -Fx "$SHA_NAME" >/dev/null; then
   exit 1
 fi
 
+if ! echo "$ASSET_NAMES" | grep -Fx "$APP_ZIP_NAME" >/dev/null; then
+  echo "Missing asset on $TAG: $APP_ZIP_NAME" >&2
+  exit 1
+fi
+
+if ! echo "$ASSET_NAMES" | grep -Fx "$APP_ZIP_SHA_NAME" >/dev/null; then
+  echo "Missing asset on $TAG: $APP_ZIP_SHA_NAME" >&2
+  exit 1
+fi
+
 echo "Release assets verified for $TAG:"
 echo "  $ARCHIVE_NAME"
 echo "  $SHA_NAME"
+echo "  $APP_ZIP_NAME"
+echo "  $APP_ZIP_SHA_NAME"
