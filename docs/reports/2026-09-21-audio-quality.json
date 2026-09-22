@@ -1,0 +1,106 @@
+{
+  "date": "2026-09-21",
+  "sample_rate": 48000,
+  "source": "Audient iD14 input 1",
+  "before": {
+    "levels": {
+      "input_1": {
+        "rms_dbfs": -31.65,
+        "peak_dbfs": -4.93,
+        "clipped_samples": 0,
+        "zero_samples": 1
+      },
+      "input_2": {
+        "rms_dbfs": -112.61,
+        "peak_dbfs": -99.08,
+        "clipped_samples": 0,
+        "zero_samples": 966
+      },
+      "expected_mix": {
+        "rms_dbfs": -37.67,
+        "peak_dbfs": -10.95,
+        "clipped_samples": 0,
+        "zero_samples": 0
+      },
+      "virtual": {
+        "rms_dbfs": -37.94,
+        "peak_dbfs": -10.95,
+        "clipped_samples": 0,
+        "zero_samples": 63588
+      }
+    },
+    "interior_silent_gaps": {
+      "count": 119,
+      "total_ms": 1291.0,
+      "first_six_runs": [
+        {
+          "start_seconds": 0.5236666666666666,
+          "duration_ms": 19.25
+        },
+        {
+          "start_seconds": 0.776,
+          "duration_ms": 12.25
+        },
+        {
+          "start_seconds": 1.032,
+          "duration_ms": 12.25
+        },
+        {
+          "start_seconds": 1.2773333333333334,
+          "duration_ms": 12.25
+        },
+        {
+          "start_seconds": 1.53325,
+          "duration_ms": 2.75
+        },
+        {
+          "start_seconds": 1.7716666666666667,
+          "duration_ms": 19.25
+        }
+      ]
+    },
+    "driver_tone_correlation": 0.4249,
+    "driver_tone_error_ratio": 2.1306
+  },
+  "after": {
+    "levels": {
+      "input_1": {
+        "rms_dbfs": -32.0,
+        "peak_dbfs": -6.41,
+        "clipped_samples": 0,
+        "zero_samples": 0
+      },
+      "input_2": {
+        "rms_dbfs": -112.61,
+        "peak_dbfs": -98.19,
+        "clipped_samples": 0,
+        "zero_samples": 858
+      },
+      "expected_mix": {
+        "rms_dbfs": -32.0,
+        "peak_dbfs": -6.41,
+        "clipped_samples": 0,
+        "zero_samples": 0
+      },
+      "virtual": {
+        "rms_dbfs": -31.97,
+        "peak_dbfs": -6.41,
+        "clipped_samples": 0,
+        "zero_samples": 0
+      }
+    },
+    "comparison": {
+      "compared_frames": 1437360,
+      "matched_exactly_frames": 1437360,
+      "max_absolute_error": 0.0,
+      "rms_error": 0.0,
+      "gain": 1.0,
+      "correlation": 0.9999999999999999,
+      "reference_rms": 0.025147807064023205
+    },
+    "measured_source_to_virtual_latency_ms": 27.788416666666663,
+    "driver_tone_latency_ms": 21.33,
+    "driver_tone_correlation": 1.0,
+    "driver_tone_error_ratio": 0.0
+  }
+}

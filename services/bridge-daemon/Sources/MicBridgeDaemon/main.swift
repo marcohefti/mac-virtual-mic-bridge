@@ -1,16 +1,28 @@
 import AppKit
+import AVFoundation
 import BridgeCore
 import Foundation
+import Darwin
 
 final class BridgeDaemonController {
     private let configStore = BridgeConfigStore()
     private let statusStore = BridgeStatusStore()
     private let engine = AudioBridgeEngine()
+    private let worker = DispatchQueue(label: "ch.hefti.micbridge.recovery")
+    private let watchdog = WorkerWatchdog()
+    private var watchdogTimer: DispatchSourceTimer?
+    private var permissionRequested = false
+    private var suspended = false
+    private var generation: UInt64 = 0
+    private var healthRestarts: [Date] = []
+    private var previousCounters: (underflow: UInt64, dropped: UInt64) = (0, 0)
+    private var instanceLock: Int32 = -1
 
     private var currentConfig: BridgeConfig?
     private var currentSession: BridgeSessionInfo?
     private var lastConfigModificationDate: Date?
 
+    private var lastTelemetryLogAt = Date.distantPast
     private var tickTimer: DispatchSourceTimer?
     private var retryAfterErrorSeconds: Int = 3
     private var nextRetryAt: Date?
@@ -23,8 +35,14 @@ final class BridgeDaemonController {
 
     func start() throws {
         try BridgePaths.ensureDirectories()
+        instanceLock = open(BridgePaths.appSupportDir.appendingPathComponent("daemon.lock").path, O_CREAT | O_RDWR, 0o600)
+        guard instanceLock >= 0, flock(instanceLock, LOCK_EX | LOCK_NB) == 0 else {
+            fputs("Another bridge daemon already owns the runtime\n", stderr)
+            exit(0)
+        }
         try writePIDFile()
 
+        BridgeLogger.log(.info, "Runtime executable: \(Bundle.main.executableURL?.resolvingSymlinksInPath().path ?? "unknown")")
         BridgeLogger.log(.info, "Daemon started. Config path: \(BridgePaths.configPath.path)")
         statusStore.save(BridgeStatus(state: .starting, message: "Starting daemon"))
 
@@ -32,7 +50,16 @@ final class BridgeDaemonController {
         setupSleepWakeObservers()
         setupTickTimer()
 
-        safeApplyConfig(forceRestart: true, reason: "startup")
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + 5, repeating: 5)
+        timer.setEventHandler { [weak self] in
+            guard let self, self.watchdog.isExpired(after: 45) else { return }
+            // Bypass a possibly stuck control worker; launchd recreates the process.
+            fputs("MicBridge recovery worker stalled for 45s; exiting for launchd recovery\n", stderr)
+            _exit(70)
+        }
+        timer.resume(); watchdogTimer = timer
+        worker.async { self.safeApplyConfig(forceRestart: true, reason: "startup") }
     }
 
     private func setupSignals() {
@@ -40,7 +67,7 @@ final class BridgeDaemonController {
         signal(SIGTERM, SIG_IGN)
         signal(SIGINT, SIG_IGN)
 
-        hupSignalSource = DispatchSource.makeSignalSource(signal: SIGHUP, queue: .main)
+        hupSignalSource = DispatchSource.makeSignalSource(signal: SIGHUP, queue: worker)
         hupSignalSource?.setEventHandler { [weak self] in
             guard let self else { return }
             BridgeLogger.log(.info, "Received SIGHUP, reloading config")
@@ -48,13 +75,13 @@ final class BridgeDaemonController {
         }
         hupSignalSource?.resume()
 
-        termSignalSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        termSignalSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: worker)
         termSignalSource?.setEventHandler { [weak self] in
             self?.shutdown(reason: "SIGTERM")
         }
         termSignalSource?.resume()
 
-        intSignalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+        intSignalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: worker)
         intSignalSource?.setEventHandler { [weak self] in
             self?.shutdown(reason: "SIGINT")
         }
@@ -62,34 +89,33 @@ final class BridgeDaemonController {
     }
 
     private func setupSleepWakeObservers() {
-        let workspaceCenter = NSWorkspace.shared.notificationCenter
-
-        workspaceCenter.addObserver(
-            forName: NSWorkspace.willSleepNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            BridgeLogger.log(.info, "System will sleep, stopping bridge")
-            self.engine.stop()
-            self.statusStore.save(BridgeStatus(state: .restarting, message: "System sleeping, bridge paused"))
+            self.watchdog.beat(suspended: true)
+            self.worker.async {
+                self.suspended = true; self.generation &+= 1
+                self.engine.stop(); self.currentSession = nil
+                self.statusStore.save(BridgeStatus(state: .restarting, message: "System sleeping, bridge paused"))
+            }
         }
-
-        workspaceCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            BridgeLogger.log(.info, "System woke up, restarting bridge")
-            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(1)) {
-                self.safeApplyConfig(forceRestart: true, reason: "wake")
+            self.watchdog.beat()
+            self.worker.async {
+                self.suspended = false; self.generation &+= 1
+                let expected = self.generation
+                self.nextRetryAt = Date().addingTimeInterval(1)
+                self.worker.asyncAfter(deadline: .now() + 1) {
+                    guard !self.suspended, self.generation == expected else { return }
+                    self.safeApplyConfig(forceRestart: true, reason: "wake")
+                }
             }
         }
     }
 
     private func setupTickTimer() {
-        let timer = DispatchSource.makeTimerSource(queue: .main)
+        let timer = DispatchSource.makeTimerSource(queue: worker)
         timer.schedule(deadline: .now() + .seconds(2), repeating: .seconds(2))
         timer.setEventHandler { [weak self] in
             self?.onTick()
@@ -99,6 +125,8 @@ final class BridgeDaemonController {
     }
 
     private func onTick() {
+        watchdog.beat(suspended: suspended)
+        guard !suspended else { return }
         let currentMod = configStore.loadLastModificationDate()
         if currentMod != lastConfigModificationDate {
             safeApplyConfig(forceRestart: true, reason: "config_changed")
@@ -106,6 +134,26 @@ final class BridgeDaemonController {
         }
 
         if engine.isBridgeRunning() {
+            guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+                reportError("Microphone authorization revoked; capture stopped")
+                return
+            }
+            let counters = engine.discontinuityCounters()
+            if counters.underflow > previousCounters.underflow || counters.dropped > previousCounters.dropped {
+                BridgeLogger.log(.warning, "Audio discontinuity: \(engine.currentTelemetryMessage())")
+            }
+            previousCounters = counters
+            if let failure = engine.healthFailure() {
+                BridgeLogger.log(.error, "Health failure: \(failure). \(engine.currentTelemetryMessage())")
+                healthRestarts = healthRestarts.filter { Date().timeIntervalSince($0) < 60 }
+                healthRestarts.append(Date())
+                if healthRestarts.count >= 3 {
+                    statusStore.save(BridgeStatus(state: .error, message: "Repeated audio failures; restarting daemon"))
+                    exit(70)
+                }
+                safeApplyConfig(forceRestart: true, reason: "health_failure")
+                return
+            }
             if !engine.hasLiveDevices() {
                 BridgeLogger.log(.warning, "Device liveness check failed, restarting bridge")
                 safeApplyConfig(forceRestart: true, reason: "device_lost")
@@ -113,6 +161,10 @@ final class BridgeDaemonController {
             }
 
             if let session = currentSession {
+                if Date().timeIntervalSince(lastTelemetryLogAt) >= 30 {
+                    BridgeLogger.log(.info, "Audio health: \(engine.currentTelemetryMessage())")
+                    lastTelemetryLogAt = Date()
+                }
                 statusStore.save(
                     BridgeStatus(
                         state: .running,
@@ -139,6 +191,11 @@ final class BridgeDaemonController {
     }
 
     private func safeApplyConfig(forceRestart: Bool, reason: String) {
+        guard !suspended else { return }
+        generation &+= 1
+        watchdog.beat()
+        statusStore.save(BridgeStatus(state: .starting, message: "Starting audio (\(reason))"))
+        defer { watchdog.beat(suspended: suspended) }
         do {
             try applyConfig(forceRestart: forceRestart, reason: reason)
             retryAfterErrorSeconds = 3
@@ -170,10 +227,24 @@ final class BridgeDaemonController {
         }
 
         engine.stop()
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: break
+        case .notDetermined:
+            if !permissionRequested {
+                permissionRequested = true
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    BridgeLogger.log(.info, "Microphone permission result: \(granted)")
+                }
+            }
+            throw CoreAudioError.invalidState("Microphone permission pending. Allow MicBridge Audio in the macOS prompt.")
+        default:
+            throw CoreAudioError.invalidState("Microphone access denied. Enable MicBridge Audio in System Settings > Privacy & Security > Microphone.")
+        }
 
         do {
             let session = try engine.start(config: config)
             currentSession = session
+            previousCounters = engine.discontinuityCounters()
             statusStore.save(
                 BridgeStatus(
                     state: .running,
@@ -240,6 +311,8 @@ final class BridgeDaemonController {
     }
 
     private func reportError(_ message: String) {
+        engine.stop()
+        currentSession = nil
         waitingForConfiguredSourceUID = nil
         BridgeLogger.log(.error, message)
         statusStore.save(BridgeStatus(state: .error, message: message))

@@ -14,6 +14,10 @@ STDERR_LOG="$LOG_DIR/launchd-daemon.stderr.log"
 mkdir -p "$LAUNCH_AGENTS_DIR" "$LOG_DIR"
 "$ROOT_DIR/scripts/install-runtime-binaries.sh" >/dev/null
 
+# Retire session and persistent supervisors before stopping their processes.
+launchctl bootout "gui/$USER_ID/ch.hefti.micbridge.session.daemon" >/dev/null 2>&1 || true
+launchctl bootout "gui/$USER_ID/$LABEL" >/dev/null 2>&1 || true
+
 # Avoid duplicate manual + launchd daemon instances.
 "$ROOT_DIR/scripts/stop-daemon.sh" >/dev/null 2>&1 || true
 
@@ -37,7 +41,7 @@ cat > "$PLIST_PATH" <<PLIST
   <key>StandardErrorPath</key>
   <string>$STDERR_LOG</string>
   <key>WorkingDirectory</key>
-  <string>$ROOT_DIR</string>
+  <string>$HOME/Library/Application Support/MacVirtualMicBridge</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>MICBRIDGE_LOG_STDOUT</key>
@@ -54,7 +58,7 @@ launchctl bootout "gui/$USER_ID" "$PLIST_PATH" >/dev/null 2>&1 || true
 
 launchctl bootstrap "gui/$USER_ID" "$PLIST_PATH"
 launchctl enable "gui/$USER_ID/$LABEL" >/dev/null 2>&1 || true
-launchctl kickstart -k "gui/$USER_ID/$LABEL"
+
 
 echo "Installed and started launchd service:"
 echo "  Label: $LABEL"

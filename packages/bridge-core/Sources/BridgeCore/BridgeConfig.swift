@@ -27,12 +27,16 @@ public struct BridgePaths {
 
 public struct BridgeConfig: Codable, Equatable {
     public var sourceDeviceUID: String?
+    public var sourceChannelSelections: [String: Int]
+    public var sourceInputChannel: Int
     public var targetDeviceUID: String?
     public var virtualMicrophoneName: String
     public var enabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case sourceDeviceUID
+        case sourceChannelSelections
+        case sourceInputChannel
         case targetDeviceUID
         case virtualMicrophoneName
         case enabled
@@ -42,9 +46,12 @@ public struct BridgeConfig: Codable, Equatable {
         sourceDeviceUID: String? = nil,
         targetDeviceUID: String? = nil,
         virtualMicrophoneName: String = "MicBridge Virtual Mic",
-        enabled: Bool = true
+        enabled: Bool = true,
+        sourceInputChannel: Int = 1
     ) {
         self.sourceDeviceUID = sourceDeviceUID
+        self.sourceInputChannel = sourceInputChannel
+        self.sourceChannelSelections = [:]
         self.targetDeviceUID = targetDeviceUID
         self.virtualMicrophoneName = virtualMicrophoneName
         self.enabled = enabled
@@ -53,6 +60,8 @@ public struct BridgeConfig: Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         sourceDeviceUID = try container.decodeIfPresent(String.self, forKey: .sourceDeviceUID)
+        sourceChannelSelections = try container.decodeIfPresent([String: Int].self, forKey: .sourceChannelSelections) ?? [:]
+        sourceInputChannel = try container.decodeIfPresent(Int.self, forKey: .sourceInputChannel) ?? 1
         targetDeviceUID = try container.decodeIfPresent(String.self, forKey: .targetDeviceUID)
         virtualMicrophoneName = try container.decodeIfPresent(String.self, forKey: .virtualMicrophoneName) ?? "MicBridge Virtual Mic"
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
@@ -61,6 +70,8 @@ public struct BridgeConfig: Codable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(sourceDeviceUID, forKey: .sourceDeviceUID)
+        try container.encode(sourceChannelSelections, forKey: .sourceChannelSelections)
+        try container.encode(sourceInputChannel, forKey: .sourceInputChannel)
         try container.encodeIfPresent(targetDeviceUID, forKey: .targetDeviceUID)
         try container.encode(virtualMicrophoneName, forKey: .virtualMicrophoneName)
         try container.encode(enabled, forKey: .enabled)
@@ -83,6 +94,12 @@ public struct BridgeStatus: Codable {
     public var sampleRate: Double?
     public var channelCount: Int?
     public var updatedAtISO8601: String
+
+    public var isFresh: Bool {
+        guard let date = ISO8601DateFormatter().date(from: updatedAtISO8601) else { return false }
+        let age = Date().timeIntervalSince(date)
+        return age >= -5 && age < 10
+    }
 
     public init(
         state: BridgeRuntimeState,

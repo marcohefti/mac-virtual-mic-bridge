@@ -26,14 +26,14 @@ private struct ValidationConfig {
         frequencyHz: 997,
         amplitude: 0.20,
         preRollSeconds: 0.25,
-        toneSeconds: 0.25,
+        toneSeconds: 5.0,
         postRollSeconds: 0.75,
         extraCaptureSeconds: 3.00,
         probeFrames: 4096,
         coarseStepFrames: 32,
         minCaptureRMS: 0.002,
-        minCorrelation: 0.70,
-        maxErrorRatio: 0.45
+        minCorrelation: 0.99,
+        maxErrorRatio: 0.05
     )
 }
 
@@ -279,10 +279,11 @@ private func usageText() -> String {
     Optional:
       --sample-rate <hz>          Default: 48000
       --frequency-hz <hz>         Default: 997
-      --tone-seconds <seconds>    Default: 0.25
+      --tone-seconds <seconds>    Default: 5.0
+      --check-live-signal        Check current microphone route without injecting a tone
       --min-capture-rms <value>   Default: 0.002
-      --min-correlation <value>   Default: 0.70
-      --max-error-ratio <value>   Default: 0.45
+      --min-correlation <value>   Default: 0.99
+      --max-error-ratio <value>   Default: 0.05
     """
 }
 
@@ -572,6 +573,11 @@ private final class InputCaptureUnit {
         self.unit = nil
     }
 
+    func capturedChannel(_ channel: Int) -> [Float] {
+        precondition(channel >= 0 && channel < channelCount)
+        return (0..<(writtenSamples / channelCount)).map { captureStorage[$0 * channelCount + channel] }
+    }
+
     func capturedMono() -> [Float] {
         guard writtenSamples > 0 else { return [] }
         let frameCount = writtenSamples / channelCount
@@ -812,7 +818,77 @@ private func trySetNominalSampleRate(_ device: AudioDevice, rate: Double) {
     }
 }
 
+// Observe the real source and virtual input together, without changing routing
+// or injecting a tone. A running daemon alone does not prove audible output.
+private func checkLiveSignal() throws {
+    let config = try BridgeConfigStore().load()
+    let state = BridgeStatusStore().load()
+    guard state?.isFresh == true, state?.state == .running, let sourceUID = state?.sourceDeviceUID, let targetUID = state?.targetDeviceUID else {
+        throw ValidationError.invalidState("Running source/target required for live signal check")
+    }
+    let source = try CoreAudioDeviceRegistry.findDevice(uid: sourceUID)
+    let target = try CoreAudioDeviceRegistry.findDevice(uid: targetUID)
+    let selected = try InputChannelSelection(channel: config.sourceInputChannel, sourceChannels: source.inputChannels)
+    let rate = state?.sampleRate ?? 48000
+    let sourceCapture = InputCaptureUnit(sampleRate: rate, channelCount: source.inputChannels, maxCaptureFrames: Int(rate * 4))
+    let targetCapture = InputCaptureUnit(sampleRate: rate, channelCount: 1, maxCaptureFrames: Int(rate * 4))
+    try sourceCapture.configure(inputDeviceID: source.id)
+    try targetCapture.configure(inputDeviceID: target.id)
+    defer { sourceCapture.stop(); targetCapture.stop() }
+    try sourceCapture.start()
+    try targetCapture.start()
+    Thread.sleep(forTimeInterval: 3)
+    sourceCapture.stop(); targetCapture.stop()
+    let sourceSamples = sourceCapture.capturedChannel(selected.channelIndex)
+    let targetSamples = targetCapture.capturedMono()
+    let warmup = Int(rate)
+    guard sourceSamples.count > warmup, targetSamples.count > warmup else {
+        throw ValidationError.invalidState("Live signal capture did not receive enough frames")
+    }
+    let inputRMS = rms(Array(sourceSamples.dropFirst(warmup)))
+    let outputRMS = rms(Array(targetSamples.dropFirst(warmup)))
+    let silentFraction = Double(targetSamples.dropFirst(warmup).filter { $0 == 0 }.count)
+        / Double(targetSamples.count - warmup)
+    print(String(format: "[signal] source_rms=%.8f virtual_rms=%.8f virtual_zero_fraction=%.4f", inputRMS, outputRMS, silentFraction))
+    if inputRMS < 0.0000001 {
+        print("[signal] INCONCLUSIVE: selected physical input is silent; speak and repeat the check")
+        exit(2)
+    }
+    guard outputRMS > 0.00000001, silentFraction < 0.95 else {
+        throw ValidationError.invalidState("Physical microphone has a signal but the virtual microphone is silent")
+    }
+    print("[signal] PASS: real microphone signal is present on the virtual input")
+}
+
 do {
+    if CommandLine.arguments.contains("--identify-channels") {
+        let config = try BridgeConfigStore().load()
+        guard let uid = config.sourceDeviceUID ?? BridgeStatusStore().load()?.sourceDeviceUID else {
+            throw ValidationError.invalidState("Select a physical input first")
+        }
+        let source = try CoreAudioDeviceRegistry.findDevice(uid: uid)
+        let rate = source.nominalSampleRate
+        let capture = InputCaptureUnit(sampleRate: rate, channelCount: source.inputChannels, maxCaptureFrames: Int(rate * 6))
+        try capture.configure(inputDeviceID: source.id)
+        defer { capture.stop() }
+        try capture.start(); Thread.sleep(forTimeInterval: 5); capture.stop()
+        var loudest = 1, maxRMS: Double = 0
+        for channel in 1...source.inputChannels {
+            let level = rms(capture.capturedChannel(channel - 1))
+            if level > maxRMS { loudest = channel; maxRMS = level }
+            print(String(format: "%d: %@ — %.1f dBFS", channel,
+                CoreAudioDeviceRegistry.inputChannelName(deviceID: source.id, channel: channel), 20 * log10(max(level, 1e-12))))
+        }
+        print("Most active: Input \(loudest). Choose it only if this activity was your voice.")
+        exit(0)
+    }
+    if CommandLine.arguments.contains("--check-live-signal") {
+        guard CommandLine.arguments.count == 2 else {
+            throw ValidationError.usage("--check-live-signal uses the running route and takes no other options")
+        }
+        try checkLiveSignal()
+        exit(0)
+    }
     let cfg = try parseArguments()
 
     let injectDevice = try CoreAudioDeviceRegistry.findDevice(uid: cfg.injectOutputUID)
@@ -911,6 +987,9 @@ do {
     print(String(format: "[audio-e2e] segment_rms=%.6f gain=%.6f", similarity.segmentRMS, similarity.gain))
     print(String(format: "[audio-e2e] full_correlation=%.4f error_ratio=%.4f", similarity.correlation, similarity.errorRatio))
 
+    if latencyMs > 100 {
+        throw ValidationError.invalidState(String(format: "Round-trip latency too high (%.2f ms > 100 ms)", latencyMs))
+    }
     if overallCaptureRMS < cfg.minCaptureRMS {
         throw ValidationError.invalidState(
             String(
@@ -928,6 +1007,9 @@ do {
                 cfg.minCorrelation
             )
         )
+    }
+    if abs(similarity.gain - 1) > 0.01 || similarity.correlation < cfg.minCorrelation {
+        throw ValidationError.invalidState("Gain, polarity or full waveform correlation failed")
     }
     if similarity.errorRatio > cfg.maxErrorRatio {
         throw ValidationError.invalidState(

@@ -1,6 +1,11 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
+# Stop the supervisors first, otherwise KeepAlive immediately respawns the daemon.
+for label in ch.hefti.macvirtualmicbridge.daemon ch.hefti.micbridge.session.daemon; do
+  launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
+done
+
 PID_FILE="$HOME/Library/Application Support/MacVirtualMicBridge/daemon.pid"
 DAEMON_NAME="micbridge-daemon"
 
@@ -40,7 +45,7 @@ if ! is_expected_daemon_pid "$PID"; then
 fi
 
 kill "$PID"
-sleep 0.3
+sleep 2
 if kill -0 "$PID" >/dev/null 2>&1; then
   kill -9 "$PID" >/dev/null 2>&1 || true
 fi

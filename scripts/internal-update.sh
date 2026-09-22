@@ -145,6 +145,17 @@ restart_services() {
   fi
 
   if [[ -f "$menubar_plist" ]]; then
+    # The installed app and login job must use the same release, including rollback.
+    local menu_executable
+    menu_executable="$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:0' "$menubar_plist")"
+    if [[ "$menu_executable" == */Contents/MacOS/micbridge-menubar ]]; then
+      local app_bundle="${menu_executable%/Contents/MacOS/micbridge-menubar}"
+      cp "$CURRENT_LINK/micbridge-menubar" "$menu_executable.next"
+      chmod +x "$menu_executable.next"
+      mv -f "$menu_executable.next" "$menu_executable"
+      codesign --force --sign - --timestamp=none "$app_bundle"
+      codesign --verify --deep --strict "$app_bundle"
+    fi
     launchctl kickstart -k "gui/$uid/$menubar_label" >/dev/null 2>&1 || true
   fi
 }

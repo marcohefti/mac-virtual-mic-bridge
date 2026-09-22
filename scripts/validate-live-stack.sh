@@ -4,6 +4,7 @@ set -euo pipefail
 # Live smoke validation against the current macOS audio stack.
 # Does not restart coreaudiod and does not require sudo.
 
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_SUPPORT_DIR="$HOME/Library/Application Support/MacVirtualMicBridge"
 STATUS_FILE="$APP_SUPPORT_DIR/status.json"
 CONFIG_FILE="$APP_SUPPORT_DIR/config.json"
@@ -93,14 +94,23 @@ if [[ ! -f "$STATUS_FILE" ]]; then
 fi
 
 python3 - <<'PY'
-import json, os, pathlib, sys
+import json, os, pathlib, sys, datetime
 status_path = pathlib.Path.home()/"Library/Application Support/MacVirtualMicBridge/status.json"
 status = json.loads(status_path.read_text())
+updated = datetime.datetime.fromisoformat(status["updatedAtISO8601"].replace("Z", "+00:00"))
+if (datetime.datetime.now(datetime.timezone.utc) - updated).total_seconds() > 10:
+    print("Daemon heartbeat is stale", file=sys.stderr)
+    sys.exit(1)
 if status.get("state") != "running":
     print(f"Daemon not running: {status.get('state')} / {status.get('message')}", file=sys.stderr)
     sys.exit(1)
 if not status.get("targetDeviceUID"):
     print("Daemon status does not include a targetDeviceUID", file=sys.stderr)
     sys.exit(1)
-print("live validation passed")
+print("daemon status and device visibility passed")
 PY
+
+echo "[live] Checking actual microphone signal"
+cd "$ROOT_DIR"
+swift run -c release micbridge-audio-e2e-validate --check-live-signal
+echo "[live] Validation complete (see signal result above)"

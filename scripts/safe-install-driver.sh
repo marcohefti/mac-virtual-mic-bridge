@@ -35,12 +35,14 @@ if [[ ! -x "$INSTALL_SCRIPT" ]]; then
   exit 1
 fi
 
-BACKUP_ROOT="$(mktemp -d /tmp/micbridge-driver-backup.XXXXXX)"
+BACKUP_PARENT="/Library/Application Support/MicBridge/driver-backups"
+mkdir -p "$BACKUP_PARENT"
+BACKUP_ROOT="$(mktemp -d "$BACKUP_PARENT/backup.XXXXXX")"
 BACKUP_BUNDLE="$BACKUP_ROOT/MicBridge.driver"
 HAD_EXISTING=0
 
 cleanup() {
-  rm -rf "$BACKUP_ROOT"
+  echo "Retained rollback bundle at: $BACKUP_ROOT"
 }
 trap cleanup EXIT
 
@@ -168,4 +170,16 @@ if ! wait_for_post_install_health "$DEVICE_NAME" 30; then
   exit 1
 fi
 
-echo "Safe install completed and health checks passed."
+# Run audio in the logged-in user's session, with the original route restored
+# even when the synthetic waveform test fails.
+CONSOLE_USER="$(stat -f %Su /dev/console)"
+if [[ "$CONSOLE_USER" == "root" || "$CONSOLE_USER" == "loginwindow" ]]; then
+  echo "No logged-in user available for post-install audio verification" >&2
+  rollback_install
+  exit 1
+fi
+if ! launchctl asuser "$(id -u "$CONSOLE_USER")" sudo -u "$CONSOLE_USER" "$ROOT_DIR/scripts/verify-installed-audio.sh"; then
+  rollback_install
+  exit 1
+fi
+echo "Safe install completed; see waveform and physical-route verification results above."

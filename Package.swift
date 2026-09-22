@@ -15,14 +15,18 @@ let package = Package(
         .executable(name: "micbridge-audio-e2e-validate", targets: ["MicBridgeAudioE2EValidate"])
     ],
     targets: [
+        .target(name: "BridgeRT", path: "packages/bridge-core/Sources/BridgeRT"),
         .target(
             name: "BridgeCore",
+            dependencies: ["BridgeRT"],
             path: "packages/bridge-core/Sources/BridgeCore"
         ),
         .executableTarget(
             name: "MicBridgeDaemon",
             dependencies: ["BridgeCore"],
-            path: "services/bridge-daemon/Sources/MicBridgeDaemon"
+            path: "services/bridge-daemon/Sources/MicBridgeDaemon",
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-sectcreate", "-Xlinker", "__TEXT",
+                "-Xlinker", "__info_plist", "-Xlinker", "services/bridge-daemon/Info.plist"])]
         ),
         .executableTarget(
             name: "MicBridgeMenuBar",

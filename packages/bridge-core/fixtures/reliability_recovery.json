@@ -1,0 +1,101 @@
+[
+  {
+    "id" : 1,
+    "inputChannels" : 1,
+    "isAlive" : true,
+    "name" : "Marco’s iPhone Microphone",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 0,
+    "uid" : "1016B273-B0F4-4815-B8D9-9FA300000003"
+  },
+  {
+    "id" : 2,
+    "inputChannels" : 0,
+    "isAlive" : true,
+    "name" : "AW3423DWF",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 2,
+    "uid" : "10AC12A2-0000-0000-0B22-0104B5502278"
+  },
+  {
+    "id" : 3,
+    "inputChannels" : 0,
+    "isAlive" : true,
+    "name" : "MAG274QRF-QD",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 2,
+    "uid" : "3669A83C-0000-0000-2020-0104B53C2278"
+  },
+  {
+    "id" : 4,
+    "inputChannels" : 12,
+    "isAlive" : true,
+    "name" : "Audient iD14",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 6,
+    "uid" : "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2"
+  },
+  {
+    "id" : 5,
+    "inputChannels" : 1,
+    "isAlive" : true,
+    "name" : "Insta360 Link 2C Pro",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 0,
+    "uid" : "AppleUSBAudioEngine:Insta360:Insta360 Link 2C Pro:2112110:3"
+  },
+  {
+    "id" : 6,
+    "inputChannels" : 1,
+    "isAlive" : true,
+    "name" : "Bose QC Ultra Headphones",
+    "nominalSampleRate" : 16000,
+    "outputChannels" : 0,
+    "uid" : "BC-87-FA-28-EF-F1:input"
+  },
+  {
+    "id" : 7,
+    "inputChannels" : 0,
+    "isAlive" : true,
+    "name" : "Bose QC Ultra Headphones",
+    "nominalSampleRate" : 44100,
+    "outputChannels" : 2,
+    "uid" : "BC-87-FA-28-EF-F1:output"
+  },
+  {
+    "id" : 8,
+    "inputChannels" : 1,
+    "isAlive" : true,
+    "name" : "MacBook Pro Microphone",
+    "nominalSampleRate" : 44100,
+    "outputChannels" : 0,
+    "uid" : "BuiltInMicrophoneDevice"
+  },
+  {
+    "id" : 9,
+    "inputChannels" : 0,
+    "isAlive" : true,
+    "name" : "MacBook Pro Speakers",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 2,
+    "uid" : "BuiltInSpeakerDevice"
+  },
+  {
+    "id" : 10,
+    "inputChannels" : 1,
+    "isAlive" : true,
+    "name" : "MicBridge Virtual Mic",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 1,
+    "uid" : "ch.hefti.micbridge.virtualmic.device"
+  },
+  {
+    "id" : 11,
+    "inputChannels" : 1,
+    "isAlive" : true,
+    "name" : "Microsoft Teams Audio",
+    "nominalSampleRate" : 48000,
+    "outputChannels" : 1,
+    "uid" : "MSLoopbackDriverDevice_UID"
+  }
+]

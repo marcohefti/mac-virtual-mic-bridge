@@ -28,7 +28,7 @@ public struct AudioDevice: Equatable {
         self.isAlive = isAlive
     }
 
-    public var isInputCandidate: Bool { inputChannels > 0 && isAlive }
+    public var isInputCandidate: Bool { inputChannels > 0 && isAlive && !uid.hasPrefix("ch.hefti.micbridge.") }
     public var isOutputCandidate: Bool { outputChannels > 0 && isAlive }
 }
 
@@ -114,42 +114,26 @@ public enum DeviceSelectionPolicy {
             return nil
         }
 
-        if let configuredUID,
-           let configured = outputs.first(where: { $0.uid == configuredUID })
-        {
-            return configured
+        // An explicitly selected target must never fall back to speakers.
+        if let configuredUID {
+            return outputs.first { $0.uid == configuredUID }
         }
+        return outputs.first { $0.uid == "ch.hefti.micbridge.virtualmic.device" }
 
-        if let preferredVirtualMicName {
-            let trimmed = preferredVirtualMicName.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                if let exact = outputs.first(where: {
-                    $0.name.compare(trimmed, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
-                }) {
-                    return exact
-                }
-                if let contains = outputs.first(where: { $0.name.localizedCaseInsensitiveContains(trimmed) }) {
-                    return contains
-                }
-            }
-        }
-
-        if let micBridgeUIDMatch = outputs.first(where: { $0.uid.hasPrefix("ch.hefti.micbridge.") }) {
-            return micBridgeUIDMatch
-        }
-
-        if let micBridgeNameMatch = outputs.first(where: { $0.name.localizedCaseInsensitiveContains("MicBridge") }) {
-            return micBridgeNameMatch
-        }
-
-        return outputs.first
     }
 }
 
 public enum CoreAudioDeviceRegistry {
+    public static func inputChannelName(deviceID: AudioDeviceID, channel: Int) -> String {
+        let name = try? getDeviceStringProperty(id: deviceID, selector: kAudioObjectPropertyName,
+            scope: kAudioDevicePropertyScopeInput, element: AudioObjectPropertyElement(channel))
+        return name.flatMap { $0.isEmpty ? nil : $0 } ?? "Input \(channel)"
+    }
+
     public static func allDevices() throws -> [AudioDevice] {
         let ids = try getSystemAudioObjectIDArray(selector: kAudioHardwarePropertyDevices)
-        return try ids.compactMap { id in
+        return ids.compactMap { id in
+            do {
             guard let uid = try getDeviceStringProperty(id: id, selector: kAudioDevicePropertyDeviceUID) else {
                 return nil
             }
@@ -179,6 +163,10 @@ public enum CoreAudioDeviceRegistry {
                 nominalSampleRate: nominalSampleRate,
                 isAlive: isAliveValue != 0
             )
+            } catch {
+                BridgeLogger.log(.debug, "Skipping transient device \(id): \(error)")
+                return nil
+            }
         }
     }
 
@@ -210,6 +198,9 @@ public enum CoreAudioDeviceRegistry {
     }
 
     public static func setNominalSampleRate(deviceID: AudioObjectID, rate: Double) throws {
+        if let current = try getDeviceFloat64Property(id: deviceID,
+            selector: kAudioDevicePropertyNominalSampleRate, scope: kAudioObjectPropertyScopeGlobal,
+            element: kAudioObjectPropertyElementMain), abs(current - rate) < 0.01 { return }
         var newRate = rate
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyNominalSampleRate,
@@ -280,11 +271,13 @@ private func getSystemAudioObjectIDArray(selector: AudioObjectPropertySelector) 
     return ids
 }
 
-private func getDeviceStringProperty(id: AudioObjectID, selector: AudioObjectPropertySelector) throws -> String? {
+private func getDeviceStringProperty(id: AudioObjectID, selector: AudioObjectPropertySelector,
+    scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
+    element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain) throws -> String? {
     var address = AudioObjectPropertyAddress(
         mSelector: selector,
-        mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
+        mScope: scope,
+        mElement: element
     )
 
     guard AudioObjectHasProperty(id, &address) else {

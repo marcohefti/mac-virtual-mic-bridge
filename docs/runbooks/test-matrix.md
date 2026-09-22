@@ -23,13 +23,13 @@
 6. In Discord/GeForce NOW, choose input device `MicBridge Virtual Mic`.
 
 ## Resilience
-1. Sleep/wake (3 cycles)
+1. Sleep/wake (20 cycles)
 - Sleep 30-60s each cycle.
-- Verify daemon returns to `running` within 10s.
+- Verify real virtual microphone signal returns within 10s of the physical interface becoming available; a `running` status alone is insufficient.
 
-2. Replug source interface (5 cycles)
+2. Replug source interface (20 cycles)
 - Unplug USB interface 5s.
-- Replug and confirm auto recovery.
+- Replug and confirm actual signal recovery with Discord and a second reader left open; do not reselect the microphone.
 
 3. Long soak
 - Keep bridge active 8h.
@@ -42,5 +42,13 @@
 
 ## Exit Criteria
 - No daemon crash in 8h soak.
-- Reconnect recovery success >= 95% across cycles.
+- Reconnect recovery success 100% across all recorded cycles; measure from interface availability, target <= 10 seconds.
 - No sustained noise artifacts after wake/replug.
+
+## Automated lifecycle coverage
+
+Run `./scripts/validate-recovery.py --cycles 10` for missing source/target, invalid channel, disable/enable, reload, and process-crash recovery. Run native transport concurrency/drift tests through the main gate. Record physical sleep/replug results separately; fixture tests do not replace hardware cycles.
+
+## Soak acceptance
+
+Collect passive telemetry with `scripts/soak-monitor.py`. Review callback progress, driver delivery, cumulative underflows/drops, memory, CPU and queue depth. Startup/sleep discontinuities must be distinguished from steady-state glitches. A completed telemetry file alone is not a pass: evaluate its summary and counters against transition records. Do not claim full completion before the eight-hour interval has elapsed.

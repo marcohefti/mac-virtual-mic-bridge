@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstring>
 #include <mutex>
+#include <limits>
 
 namespace {
 
@@ -50,24 +51,30 @@ const CFStringRef kDeviceModelUID = CFSTR("ch.hefti.micbridge.virtualmic.model")
 const CFStringRef kInputStreamName = CFSTR(MICBRIDGE_INPUT_STREAM_NAME);
 const CFStringRef kOutputStreamName = CFSTR(MICBRIDGE_OUTPUT_STREAM_NAME);
 
+constexpr SInt64 kUnwrittenFrame = std::numeric_limits<SInt64>::min();
+static_assert(std::atomic<SInt64>::is_always_lock_free);
+static_assert(std::atomic<Float32>::is_always_lock_free);
+
+struct TimedSample {
+    std::atomic<SInt64> frame{kUnwrittenFrame};
+    std::atomic<Float32> value{0};
+};
+
 struct DriverState {
     std::atomic<UInt32> refCount{1};
     std::mutex configMutex;
 
     AudioServerPlugInHostRef host = nullptr;
 
-    Float64 sampleRate = kDefaultSampleRate;
+    std::atomic<Float64> sampleRate{kDefaultSampleRate};
     UInt32 bufferFrameSize = kDefaultBufferFrameSize;
 
     std::atomic<UInt32> ioClients{0};
     std::atomic<UInt64> zeroTimestampSeed{1};
     std::atomic<UInt64> anchorHostTime{0};
 
-    std::array<Float32, kRingCapacityFrames * kChannelCount> ring{};
-    std::atomic<UInt64> ringReadFrame{0};
-    std::atomic<UInt64> ringWriteFrame{0};
+    std::array<TimedSample, kRingCapacityFrames> ring{};
     std::atomic<UInt64> ringUnderruns{0};
-    std::atomic<UInt64> ringOverruns{0};
 };
 
 DriverState gState;
@@ -265,52 +272,37 @@ OSStatus CopyFloat64ToOutData(Float64 value, UInt32 inDataSize, UInt32* outDataS
     return noErr;
 }
 
-void WriteRing(const Float32* source, UInt32 frameCount) {
-    UInt64 writeFrame = gState.ringWriteFrame.load(std::memory_order_relaxed);
-    UInt64 readFrame = gState.ringReadFrame.load(std::memory_order_acquire);
-    UInt64 available = writeFrame - readFrame;
-
-    if (available >= kRingCapacityFrames) {
-        gState.ringOverruns.fetch_add(frameCount, std::memory_order_relaxed);
-        gState.ringReadFrame.store(writeFrame - kRingCapacityFrames + 1, std::memory_order_release);
-        readFrame = gState.ringReadFrame.load(std::memory_order_acquire);
-        available = writeFrame - readFrame;
+// The HAL asks for samples on the device timeline. A consuming FIFO would
+// replay stale history after capture pauses and make readers consume each other.
+void WriteRing(const Float32* source, UInt32 frameCount, SInt64 startFrame) {
+    for (UInt32 offset = 0; offset < frameCount; ++offset) {
+        const SInt64 frame = startFrame + offset;
+        if (frame < 0) continue;
+        auto& slot = gState.ring[static_cast<UInt64>(frame) % kRingCapacityFrames];
+        slot.frame.store(kUnwrittenFrame, std::memory_order_release);
+        slot.value.store(source[offset], std::memory_order_release);
+        slot.frame.store(frame, std::memory_order_release);
     }
-
-    UInt64 capacityLeft = kRingCapacityFrames - available;
-    if (frameCount > capacityLeft) {
-        UInt64 drop = frameCount - capacityLeft;
-        gState.ringReadFrame.store(readFrame + drop, std::memory_order_release);
-        gState.ringOverruns.fetch_add(drop, std::memory_order_relaxed);
-    }
-
-    for (UInt32 frame = 0; frame < frameCount; ++frame) {
-        UInt64 index = (writeFrame + frame) % kRingCapacityFrames;
-        gState.ring[index] = source[frame];
-    }
-
-    gState.ringWriteFrame.store(writeFrame + frameCount, std::memory_order_release);
 }
 
-UInt32 ReadRing(Float32* destination, UInt32 frameCount) {
-    UInt64 readFrame = gState.ringReadFrame.load(std::memory_order_relaxed);
-    UInt64 writeFrame = gState.ringWriteFrame.load(std::memory_order_acquire);
-
-    UInt64 available = writeFrame - readFrame;
-    UInt32 framesToRead = static_cast<UInt32>(std::min<UInt64>(frameCount, available));
-
-    for (UInt32 frame = 0; frame < framesToRead; ++frame) {
-        UInt64 index = (readFrame + frame) % kRingCapacityFrames;
-        destination[frame] = gState.ring[index];
+void ReadRing(Float32* destination, UInt32 frameCount, SInt64 startFrame) {
+    UInt64 missing = 0;
+    for (UInt32 offset = 0; offset < frameCount; ++offset) {
+        const SInt64 frame = startFrame + offset;
+        Float32 value = 0;
+        bool valid = false;
+        if (frame >= 0) {
+            const auto& slot = gState.ring[static_cast<UInt64>(frame) % kRingCapacityFrames];
+            if (slot.frame.load(std::memory_order_acquire) == frame) {
+                value = slot.value.load(std::memory_order_acquire);
+                // Concurrent wraparound must yield silence, not an unrelated sample.
+                valid = slot.frame.load(std::memory_order_acquire) == frame;
+            }
+        }
+        destination[offset] = valid ? value : 0;
+        missing += !valid;
     }
-
-    if (framesToRead < frameCount) {
-        std::memset(destination + framesToRead, 0, static_cast<size_t>(frameCount - framesToRead) * sizeof(Float32));
-        gState.ringUnderruns.fetch_add(frameCount - framesToRead, std::memory_order_relaxed);
-    }
-
-    gState.ringReadFrame.store(readFrame + framesToRead, std::memory_order_release);
-    return framesToRead;
+    if (missing) gState.ringUnderruns.fetch_add(missing, std::memory_order_relaxed);
 }
 
 HRESULT MicBridge_QueryInterface(void* inDriver, REFIID inUUID, LPVOID* outInterface);
@@ -404,8 +396,10 @@ ULONG MicBridge_Release(void* /*inDriver*/) {
 OSStatus MicBridge_Initialize(AudioServerPlugInDriverRef /*inDriver*/, AudioServerPlugInHostRef inHost) {
     gState.host = inHost;
     gState.anchorHostTime = AudioGetCurrentHostTime();
-    gState.ringReadFrame = 0;
-    gState.ringWriteFrame = 0;
+    for (auto& slot : gState.ring) {
+        slot.frame.store(kUnwrittenFrame, std::memory_order_relaxed);
+        slot.value.store(0, std::memory_order_relaxed);
+    }
     return noErr;
 }
 
@@ -823,8 +817,13 @@ OSStatus MicBridge_GetPropertyData(AudioServerPlugInDriverRef /*inDriver*/, Audi
             case kAudioDevicePropertyDeviceIsRunningSomewhere:
                 return CopyUInt32ToOutData(gState.ioClients.load() > 0 ? 1 : 0, inDataSize, outDataSize, outData);
             case kAudioDevicePropertyLatency:
-            case kAudioDevicePropertySafetyOffset:
                 return CopyUInt32ToOutData(0, inDataSize, outDataSize, outData);
+            case kAudioDevicePropertySafetyOffset:
+                // Separate input and output IO can be scheduled in either order.
+                // Ask the HAL to read one maximum buffer behind the hardware
+                // position so input never races the writer for the current cycle.
+                return CopyUInt32ToOutData(IsInputScope(inAddress->mScope) ? kMaxBufferFrameSize : 0,
+                                          inDataSize, outDataSize, outData);
             case kAudioDevicePropertyNominalSampleRate:
                 return CopyFloat64ToOutData(gState.sampleRate, inDataSize, outDataSize, outData);
             case kAudioDevicePropertyZeroTimeStampPeriod:
@@ -975,8 +974,10 @@ OSStatus MicBridge_SetPropertyData(AudioServerPlugInDriverRef /*inDriver*/, Audi
             return kAudioHardwareIllegalOperationError;
         }
 
-        std::lock_guard<std::mutex> lock(gState.configMutex);
-        gState.sampleRate = requestedRate;
+        // This fixed-rate device cannot change timeline through a nominal-rate write.
+        // In particular, repeated 48kHz requests from newly opened clients are no-ops.
+        if (gState.sampleRate.load() == requestedRate) return noErr;
+        gState.sampleRate.store(requestedRate);
         gState.zeroTimestampSeed.fetch_add(1);
 
         AudioObjectPropertyAddress deviceChanged = {kAudioDevicePropertyNominalSampleRate, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
@@ -1001,9 +1002,12 @@ OSStatus MicBridge_SetPropertyData(AudioServerPlugInDriverRef /*inDriver*/, Audi
             return kAudioHardwareIllegalOperationError;
         }
 
-        std::lock_guard<std::mutex> lock(gState.configMutex);
-        gState.bufferFrameSize = requestedSize;
-        gState.zeroTimestampSeed.fetch_add(1);
+        {
+            std::lock_guard<std::mutex> lock(gState.configMutex);
+            if (gState.bufferFrameSize == requestedSize) return noErr;
+            gState.bufferFrameSize = requestedSize;
+        }
+        // Buffer sizing does not change the sample-to-host-time mapping.
 
         AudioObjectPropertyAddress changed = {kAudioDevicePropertyBufferFrameSize, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
         NotifyPropertiesChanged(kObjectID_Device, 1, &changed);
@@ -1043,8 +1047,7 @@ OSStatus MicBridge_GetZeroTimeStamp(AudioServerPlugInDriverRef /*inDriver*/, Aud
     UInt64 anchor = gState.anchorHostTime.load();
     Float64 hostFrequency = AudioGetHostClockFrequency();
 
-    std::lock_guard<std::mutex> lock(gState.configMutex);
-    Float64 sampleRate = gState.sampleRate;
+    Float64 sampleRate = gState.sampleRate.load(std::memory_order_relaxed);
     UInt32 period = ZeroTimestampPeriodFramesForSampleRate(sampleRate);
 
     Float64 elapsedSeconds = static_cast<Float64>(hostNow - anchor) / hostFrequency;
@@ -1055,7 +1058,9 @@ OSStatus MicBridge_GetZeroTimeStamp(AudioServerPlugInDriverRef /*inDriver*/, Aud
 
     *outSampleTime = static_cast<Float64>(quantizedFrames);
     *outHostTime = anchor + static_cast<UInt64>((static_cast<Float64>(quantizedFrames) / sampleRate) * hostFrequency);
-    *outSeed = gState.zeroTimestampSeed.load() + periodCount;
+    // The seed identifies a clock timeline, not a timestamp period. Changing it
+    // on every tick makes CoreAudio repeatedly resynchronize otherwise healthy IO.
+    *outSeed = gState.zeroTimestampSeed.load();
     return noErr;
 }
 
@@ -1082,7 +1087,7 @@ OSStatus MicBridge_BeginIOOperation(AudioServerPlugInDriverRef /*inDriver*/, Aud
     return kAudioHardwareBadObjectError;
 }
 
-OSStatus MicBridge_DoIOOperation(AudioServerPlugInDriverRef /*inDriver*/, AudioObjectID inDeviceObjectID, AudioObjectID inStreamObjectID, UInt32 /*inClientID*/, UInt32 inOperationID, UInt32 inIOBufferFrameSize, const AudioServerPlugInIOCycleInfo* /*inIOCycleInfo*/, void* ioMainBuffer, void* /*ioSecondaryBuffer*/) {
+OSStatus MicBridge_DoIOOperation(AudioServerPlugInDriverRef /*inDriver*/, AudioObjectID inDeviceObjectID, AudioObjectID inStreamObjectID, UInt32 /*inClientID*/, UInt32 inOperationID, UInt32 inIOBufferFrameSize, const AudioServerPlugInIOCycleInfo* inIOCycleInfo, void* ioMainBuffer, void* /*ioSecondaryBuffer*/) {
     if (!IsDeviceObject(inDeviceObjectID)) {
         return kAudioHardwareBadObjectError;
     }
@@ -1091,15 +1096,24 @@ OSStatus MicBridge_DoIOOperation(AudioServerPlugInDriverRef /*inDriver*/, AudioO
         return noErr;
     }
 
+    if (inIOCycleInfo == nullptr || inIOBufferFrameSize > kRingCapacityFrames) {
+        return kAudioHardwareIllegalOperationError;
+    }
     auto* buffer = reinterpret_cast<Float32*>(ioMainBuffer);
+    const Float64 sampleTime = inOperationID == kAudioServerPlugInIOOperationWriteMix
+        ? inIOCycleInfo->mOutputTime.mSampleTime : inIOCycleInfo->mInputTime.mSampleTime;
+    if (!std::isfinite(sampleTime) || std::abs(sampleTime) > 9.0e15) {
+        return kAudioHardwareIllegalOperationError;
+    }
+    const SInt64 startFrame = static_cast<SInt64>(std::llround(sampleTime));
 
     if (inOperationID == kAudioServerPlugInIOOperationWriteMix && IsOutputStreamObject(inStreamObjectID)) {
-        WriteRing(buffer, inIOBufferFrameSize);
+        WriteRing(buffer, inIOBufferFrameSize, startFrame);
         return noErr;
     }
 
     if (inOperationID == kAudioServerPlugInIOOperationReadInput && IsInputStreamObject(inStreamObjectID)) {
-        ReadRing(buffer, inIOBufferFrameSize);
+        ReadRing(buffer, inIOBufferFrameSize, startFrame);
         return noErr;
     }
 

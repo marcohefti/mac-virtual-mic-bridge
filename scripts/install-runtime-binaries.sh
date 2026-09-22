@@ -159,8 +159,13 @@ if [[ -e "$CURRENT_LINK" && ! -L "$CURRENT_LINK" ]]; then
   echo "Refusing to overwrite non-symlink path: $CURRENT_LINK" >&2
   exit 1
 fi
-rm -f "$CURRENT_LINK"
-ln -s "releases/$RELEASE_ID" "$CURRENT_LINK"
+# Atomic symlink replacement: readers never see a missing current executable.
+NEXT_LINK="$CURRENT_LINK.next.$$"
+ln -s "releases/$RELEASE_ID" "$NEXT_LINK"
+python3 - "$NEXT_LINK" "$CURRENT_LINK" <<'PYLINK'
+import os, sys
+os.replace(sys.argv[1], sys.argv[2])
+PYLINK
 
 current_target_name="$(readlink "$CURRENT_LINK" | awk -F/ '{print $NF}')"
 typeset -a release_dirs=("$RELEASES_DIR"/*(/N))

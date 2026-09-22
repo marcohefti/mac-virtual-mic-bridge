@@ -5,7 +5,7 @@
 1. HAL Driver (`drivers/micbridge-hal`)
 - Owns virtual input device presented to apps.
 - Exposes duplex streams (output for injection, input for app capture).
-- Performs ring-buffer loopback between output and input in real-time callbacks.
+- Performs timestamp-addressed ring-buffer loopback between output and input in real-time callbacks; reads do not consume queued history or other readers' samples.
 - No UI or policy logic.
 
 2. Bridge Daemon (`services/bridge-daemon`)

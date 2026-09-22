@@ -21,6 +21,7 @@ public final class AudioBridgeEngine {
     private var sourceDevice: AudioDevice?
     private var targetDevice: AudioDevice?
 
+    private var inputChannelSelection: InputChannelSelection?
     private var sourceCaptureChannels: Int = 0
     private var bridgeChannels: Int = 0
     private var sampleRate: Double = 0
@@ -31,9 +32,10 @@ public final class AudioBridgeEngine {
     private var convertedInputScratch: UnsafeMutablePointer<Float>?
     private var outputScratch: UnsafeMutablePointer<Float>?
 
+    private var deliveryMonitor: DeliveryMonitor?
+    private var health = RecoveryHealth()
+    private var previousDeliveryCalls: UInt64 = 0
     private var isRunning = false
-    private var underflowCount: UInt64 = 0
-    private var overflowDropCount: UInt64 = 0
 
     public init() {}
 
@@ -68,6 +70,9 @@ public final class AudioBridgeEngine {
             throw CoreAudioError.notFound("No output device found for virtual microphone target")
         }
 
+        guard chosenSource.uid != chosenTarget.uid else {
+            throw CoreAudioError.invalidState("Source and target must be different devices")
+        }
         if let configuredTargetUID = config.targetDeviceUID, configuredTargetUID != chosenTarget.uid {
             BridgeLogger.log(
                 .warning,
@@ -83,13 +88,13 @@ public final class AudioBridgeEngine {
             throw CoreAudioError.invalidState("Selected target device has no usable output channels")
         }
 
-        try CoreAudioDeviceRegistry.setNominalSampleRate(deviceID: chosenSource.id, rate: preferredSampleRate)
         try CoreAudioDeviceRegistry.setNominalSampleRate(deviceID: chosenTarget.id, rate: preferredSampleRate)
 
         let refreshedSource = try CoreAudioDeviceRegistry.findDevice(uid: chosenSource.uid)
         let refreshedTarget = try CoreAudioDeviceRegistry.findDevice(uid: chosenTarget.uid)
 
-        sourceCaptureChannels = min(max(1, refreshedSource.inputChannels), 2)
+        sourceCaptureChannels = refreshedSource.inputChannels
+        inputChannelSelection = try InputChannelSelection(channel: config.sourceInputChannel, sourceChannels: sourceCaptureChannels)
         bridgeChannels = min(max(1, refreshedTarget.outputChannels), 2)
 
         if bridgeChannels < 1 || sourceCaptureChannels < 1 {
@@ -98,11 +103,8 @@ public final class AudioBridgeEngine {
 
         sampleRate = refreshedTarget.nominalSampleRate > 0 ? refreshedTarget.nominalSampleRate : preferredSampleRate
         let sourceRate = refreshedSource.nominalSampleRate > 0 ? refreshedSource.nominalSampleRate : sampleRate
-        if abs(sourceRate - sampleRate) > 2 {
-            BridgeLogger.log(
-                .warning,
-                "Sample-rate mismatch source=\(sourceRate)Hz target=\(sampleRate)Hz. Continuing with CoreAudio rate conversion."
-            )
+        guard abs(sourceRate - sampleRate) < 1 else {
+            throw CoreAudioError.invalidState("Set \(refreshedSource.name) to 48 kHz in Audio MIDI Setup. Current rate: \(Int(sourceRate)) Hz; the bridge will not change a shared hardware clock automatically.")
         }
 
         let ringCapacityFrames = Int(sampleRate)
@@ -124,13 +126,15 @@ public final class AudioBridgeEngine {
         try checkOSStatus(AudioOutputUnitStart(outputUnit), "AudioOutputUnitStart(output)")
         try checkOSStatus(AudioOutputUnitStart(inputUnit), "AudioOutputUnitStart(input)")
 
+        deliveryMonitor = DeliveryMonitor()
+        try deliveryMonitor?.start(deviceID: refreshedTarget.id, sampleRate: sampleRate)
+        health = RecoveryHealth()
+        previousDeliveryCalls = 0
         isRunning = true
-        underflowCount = 0
-        overflowDropCount = 0
 
         BridgeLogger.log(
             .info,
-            "Bridge running: \(refreshedSource.name) -> \(refreshedTarget.name) @ \(Int(sampleRate)) Hz, \(bridgeChannels)ch"
+            "Bridge running: \(refreshedSource.name) [input \(config.sourceInputChannel)] -> \(refreshedTarget.name) @ \(Int(sampleRate)) Hz, \(bridgeChannels)ch"
         )
 
         return BridgeSessionInfo(
@@ -144,6 +148,8 @@ public final class AudioBridgeEngine {
     }
 
     public func stop() {
+        deliveryMonitor?.stop()
+        deliveryMonitor = nil
         if let inputUnit {
             AudioOutputUnitStop(inputUnit)
             AudioUnitUninitialize(inputUnit)
@@ -158,6 +164,7 @@ public final class AudioBridgeEngine {
             self.outputUnit = nil
         }
 
+        inputChannelSelection = nil
         sourceDevice = nil
         targetDevice = nil
         ringBuffer?.clear()
@@ -173,7 +180,25 @@ public final class AudioBridgeEngine {
 
     public func currentTelemetryMessage() -> String {
         let fill = ringBuffer?.fillLevelFrames() ?? 0
-        return "buffer=\(fill)f underflow=\(underflowCount) dropped=\(overflowDropCount)"
+        let queuedMilliseconds = sampleRate > 0 ? Double(fill) * 1000 / sampleRate : 0
+        let metrics = ringBuffer?.metrics()
+        let peaks = ringBuffer?.signalPeaks() ?? (input: Float(0), output: Float(0))
+        let delivery = deliveryMonitor?.snapshot
+        let signal = String(format: "input_peak=%.8f output_peak=%.8f", peaks.input, peaks.output)
+        return "input_channel=\(inputChannelSelection.map { $0.channelIndex + 1 } ?? 0) buffer=\(fill)f queued_ms=\(Int(queuedMilliseconds.rounded())) underflow=\(metrics?.underflow ?? 0) dropped=\(metrics?.dropped ?? 0) input_callbacks=\(metrics?.inputCalls ?? 0) output_callbacks=\(metrics?.outputCalls ?? 0) correction_ppm=\(Int(metrics?.correctionPPM ?? 0)) errors=\(metrics?.errors ?? 0) last_error=\(metrics?.lastError ?? 0) \(signal) delivered_peak=\(delivery?.peak ?? 0) delivery_callbacks=\(delivery?.calls ?? 0)"
+    }
+
+    public func discontinuityCounters() -> (underflow: UInt64, dropped: UInt64) {
+        let m = ringBuffer?.metrics(); return (m?.underflow ?? 0, m?.dropped ?? 0)
+    }
+
+    public func healthFailure() -> String? {
+        guard let metrics = ringBuffer?.metrics() else { return "Missing audio transport" }
+        let delivery = deliveryMonitor?.snapshot
+        defer { previousDeliveryCalls = delivery?.calls ?? 0 }
+        return health.evaluate(input: metrics.inputCalls, output: metrics.outputCalls,
+            errors: metrics.errors + (delivery?.errors ?? 0), sourcePeak: metrics.outputPeak,
+            deliveredPeak: delivery?.peak, deliveredProgress: delivery.map { $0.calls > previousDeliveryCalls } ?? false)
     }
 
     public func hasLiveDevices() -> Bool {
@@ -184,7 +209,9 @@ public final class AudioBridgeEngine {
         do {
             let source = try CoreAudioDeviceRegistry.findDevice(uid: sourceDevice.uid)
             let target = try CoreAudioDeviceRegistry.findDevice(uid: targetDevice.uid)
-            return source.isAlive && target.isAlive
+            return source.isAlive && target.isAlive && source.id == sourceDevice.id && target.id == targetDevice.id
+                && source.inputChannels == sourceCaptureChannels && abs(target.nominalSampleRate - sampleRate) < 1
+                && abs(source.nominalSampleRate - sampleRate) < 1
         } catch {
             return false
         }
@@ -236,6 +263,15 @@ public final class AudioBridgeEngine {
             throw CoreAudioError.invalidState("AudioComponentInstanceNew(input) returned nil")
         }
 
+        var committed = false
+        var createdOutput: AudioUnit?
+        defer {
+            if !committed {
+                if let unit = createdOutput { AudioUnitUninitialize(unit); AudioComponentInstanceDispose(unit) }
+                AudioUnitUninitialize(inputUnit)
+                AudioComponentInstanceDispose(inputUnit)
+            }
+        }
         var enableInput: UInt32 = 1
         var disableOutput: UInt32 = 0
         var sourceID = source.id
@@ -272,17 +308,16 @@ public final class AudioBridgeEngine {
 
         var outputDescription = inputDescription
         guard let outputComponent = AudioComponentFindNext(nil, &outputDescription) else {
-            AudioComponentInstanceDispose(inputUnit)
             throw CoreAudioError.invalidState("Could not find HAL output component for output")
         }
 
         var localOutputUnit: AudioUnit?
         try checkOSStatus(AudioComponentInstanceNew(outputComponent, &localOutputUnit), "AudioComponentInstanceNew(output)")
         guard let outputUnit = localOutputUnit else {
-            AudioComponentInstanceDispose(inputUnit)
             throw CoreAudioError.invalidState("AudioComponentInstanceNew(output) returned nil")
         }
 
+        createdOutput = outputUnit
         var enableOutput: UInt32 = 1
         var disableInput: UInt32 = 0
         var targetID = target.id
@@ -318,6 +353,7 @@ public final class AudioBridgeEngine {
 
         self.inputUnit = inputUnit
         self.outputUnit = outputUnit
+        committed = true
     }
 
     private func makePCMFormat(sampleRate: Double, channels: Int) -> AudioStreamBasicDescription {
@@ -360,12 +396,13 @@ public final class AudioBridgeEngine {
         inTimeStamp: UnsafePointer<AudioTimeStamp>,
         inNumberFrames: UInt32
     ) -> OSStatus {
-        guard let inputUnit, let ringBuffer, let inputScratch, let convertedInputScratch else {
+        guard let inputUnit, let ringBuffer, let inputScratch, let convertedInputScratch, let inputChannelSelection else {
             return noErr
         }
 
         if inNumberFrames > maxFramesPerSlice {
-            return noErr
+            ringBuffer.recordError(kAudioUnitErr_TooManyFramesToProcess)
+            return kAudioUnitErr_TooManyFramesToProcess
         }
 
         let frameCount = Int(inNumberFrames)
@@ -387,65 +424,15 @@ public final class AudioBridgeEngine {
             &bufferList
         )
         if status != noErr {
+            ringBuffer.recordError(status)
             return status
         }
 
-        if sourceCaptureChannels == bridgeChannels {
-            _ = ringBuffer.write(from: inputScratch, frameCount: frameCount)
-        } else {
-            convertInputChannels(frameCount: frameCount, input: inputScratch, output: convertedInputScratch)
-            _ = ringBuffer.write(from: convertedInputScratch, frameCount: frameCount)
-        }
-
-        let highWater = Int(Double(ringBuffer.capacityFrames) * 0.80)
-        let target = Int(Double(ringBuffer.capacityFrames) * 0.55)
-        let fill = ringBuffer.fillLevelFrames()
-
-        if fill > highWater {
-            let toDrop = fill - target
-            ringBuffer.dropOldest(frames: toDrop)
-            overflowDropCount += UInt64(max(0, toDrop))
-        }
+        inputChannelSelection.copy(from: inputScratch, to: convertedInputScratch,
+                                   frameCount: frameCount, targetChannels: bridgeChannels)
+        _ = ringBuffer.write(from: convertedInputScratch, frameCount: frameCount)
 
         return noErr
-    }
-
-    private func convertInputChannels(
-        frameCount: Int,
-        input: UnsafePointer<Float>,
-        output: UnsafeMutablePointer<Float>
-    ) {
-        if sourceCaptureChannels == 1 && bridgeChannels == 2 {
-            for frame in 0..<frameCount {
-                let sample = input[frame]
-                output[(frame * 2)] = sample
-                output[(frame * 2) + 1] = sample
-            }
-            return
-        }
-
-        if sourceCaptureChannels >= 2 && bridgeChannels == 1 {
-            for frame in 0..<frameCount {
-                let left = input[(frame * sourceCaptureChannels)]
-                let right = input[(frame * sourceCaptureChannels) + 1]
-                output[frame] = (left + right) * 0.5
-            }
-            return
-        }
-
-        let channelsToCopy = min(sourceCaptureChannels, bridgeChannels)
-        for frame in 0..<frameCount {
-            let inputBase = frame * sourceCaptureChannels
-            let outputBase = frame * bridgeChannels
-            for channel in 0..<channelsToCopy {
-                output[outputBase + channel] = input[inputBase + channel]
-            }
-            if bridgeChannels > channelsToCopy {
-                for channel in channelsToCopy..<bridgeChannels {
-                    output[outputBase + channel] = output[outputBase]
-                }
-            }
-        }
     }
 
     fileprivate func handleOutputCallback(
@@ -457,13 +444,17 @@ public final class AudioBridgeEngine {
         }
 
         if inNumberFrames > maxFramesPerSlice {
-            return noErr
+            for buffer in UnsafeMutableAudioBufferListPointer(ioData) {
+                if let data = buffer.mData { memset(data, 0, Int(buffer.mDataByteSize)) }
+            }
+            ringBuffer.recordError(kAudioUnitErr_TooManyFramesToProcess)
+            return kAudioUnitErr_TooManyFramesToProcess
         }
 
         let frameCount = Int(inNumberFrames)
         let sampleCount = frameCount * bridgeChannels
 
-        let readFrames = ringBuffer.read(into: outputScratch, frameCount: frameCount)
+        let readFrames = ringBuffer.readAdaptive(into: outputScratch, frameCount: frameCount, sampleRate: sampleRate)
 
         if readFrames < frameCount {
             let missingSamples = (frameCount - readFrames) * bridgeChannels
@@ -471,7 +462,6 @@ public final class AudioBridgeEngine {
             for index in 0..<missingSamples {
                 fillStart[index] = 0
             }
-            underflowCount += UInt64(frameCount - readFrames)
         }
 
         let bufferList = UnsafeMutableAudioBufferListPointer(ioData)

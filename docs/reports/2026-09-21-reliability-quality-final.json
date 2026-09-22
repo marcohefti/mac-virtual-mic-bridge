@@ -1,0 +1,86 @@
+{
+  "seconds": 30,
+  "windows": [
+    {
+      "second": 2,
+      "delay_ms": 58.378,
+      "correlation": 0.999829,
+      "gain_db": -0.002
+    },
+    {
+      "second": 4,
+      "delay_ms": 57.67,
+      "correlation": 0.999909,
+      "gain_db": -0.001
+    },
+    {
+      "second": 6,
+      "delay_ms": 57.357,
+      "correlation": 0.999282,
+      "gain_db": -0.005
+    },
+    {
+      "second": 8,
+      "delay_ms": 56.92,
+      "correlation": 0.99937,
+      "gain_db": -0.006
+    },
+    {
+      "second": 10,
+      "delay_ms": 56.753,
+      "correlation": 0.99997,
+      "gain_db": -0.001
+    },
+    {
+      "second": 12,
+      "delay_ms": 56.649,
+      "correlation": 1.0,
+      "gain_db": -0.0
+    },
+    {
+      "second": 14,
+      "delay_ms": 56.586,
+      "correlation": 0.999753,
+      "gain_db": -0.002
+    },
+    {
+      "second": 16,
+      "delay_ms": 56.566,
+      "correlation": 0.99991,
+      "gain_db": 0.001
+    },
+    {
+      "second": 18,
+      "delay_ms": 56.607,
+      "correlation": 0.999976,
+      "gain_db": -0.0
+    },
+    {
+      "second": 20,
+      "delay_ms": 56.649,
+      "correlation": 0.999993,
+      "gain_db": -0.0
+    },
+    {
+      "second": 22,
+      "delay_ms": 56.732,
+      "correlation": 0.999981,
+      "gain_db": 0.0
+    },
+    {
+      "second": 24,
+      "delay_ms": 56.774,
+      "correlation": 0.999999,
+      "gain_db": -0.0
+    },
+    {
+      "second": 26,
+      "delay_ms": 56.857,
+      "correlation": 0.999992,
+      "gain_db": -0.0
+    }
+  ],
+  "zero_samples_after_warmup": 0,
+  "longest_zero_run": 0,
+  "clipped_samples": 0
+}

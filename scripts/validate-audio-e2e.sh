@@ -17,10 +17,10 @@ CAPTURE_UID=""
 WAIT_SECONDS=20
 SAMPLE_RATE=48000
 FREQUENCY_HZ=997
-TONE_SECONDS=0.25
+TONE_SECONDS=5.0
 MIN_CAPTURE_RMS=0.002
-MIN_CORRELATION=0.70
-MAX_ERROR_RATIO=0.45
+MIN_CORRELATION=0.99
+MAX_ERROR_RATIO=0.05
 
 usage() {
   cat <<'EOF'
@@ -47,10 +47,10 @@ Options:
   --wait-seconds <seconds>      Wait for daemon to converge (default: 20)
   --sample-rate <hz>            Validator sample rate (default: 48000)
   --frequency-hz <hz>           Validator tone frequency (default: 997)
-  --tone-seconds <seconds>      Validator tone duration (default: 0.25)
+  --tone-seconds <seconds>      Validator tone duration (default: 5.0)
   --min-capture-rms <value>     Pass threshold (default: 0.002)
-  --min-correlation <value>     Pass threshold (default: 0.70)
-  --max-error-ratio <value>     Pass threshold (default: 0.45)
+  --min-correlation <value>     Pass threshold (default: 0.99)
+  --max-error-ratio <value>     Pass threshold (default: 0.05)
   --help                        Show help
 EOF
 }
@@ -135,6 +135,7 @@ if [[ -f "$PID_PATH" ]]; then
 fi
 
 cleanup() {
+  local original_exit=$?
   set +e
   if [[ "$CONFIG_EXISTED" -eq 1 ]]; then
     cp "$BACKUP_CONFIG" "$CONFIG_PATH"
@@ -146,7 +147,32 @@ cleanup() {
   if [[ "$DAEMON_STARTED_BY_SCRIPT" -eq 1 ]]; then
     "$ROOT_DIR/scripts/stop-daemon.sh" >/dev/null 2>&1 || true
   fi
+  if [[ "$DAEMON_WAS_RUNNING" -eq 1 && "$CONFIG_EXISTED" -eq 1 ]]; then
+    python3 - "$CONFIG_PATH" "$STATUS_PATH" <<'CHECK'
+import json,pathlib,sys,time
+config=json.loads(pathlib.Path(sys.argv[1]).read_text());status=pathlib.Path(sys.argv[2]);since=time.time()-1
+for _ in range(45):
+    try:
+        s=json.loads(status.read_text())
+        expected='running' if config.get('enabled',True) else 'stopped'
+        if s.get('state')==expected and status.stat().st_mtime>=since:break
+    except (OSError,ValueError):pass
+    time.sleep(1)
+else:sys.exit(1)
+CHECK
+    local restored=$?
+    if [[ "$restored" -eq 0 ]] && python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("enabled",True) else 1)' "$CONFIG_PATH"; then
+      sleep 2
+      "$ROOT_DIR/.build/release/micbridge-audio-e2e-validate" --check-live-signal
+      restored=$?
+    fi
+    if [[ "$restored" -ne 0 ]]; then
+      echo "[audio-e2e] Original route did not pass restoration check" >&2
+      original_exit=1
+    fi
+  fi
   rm -rf "$TMP_DIR"
+  exit "$original_exit"
 }
 trap cleanup EXIT
 
@@ -183,6 +209,7 @@ target_uid = sys.argv[3]
 config = json.loads(path.read_text())
 config["enabled"] = True
 config["sourceDeviceUID"] = source_uid
+config["sourceInputChannel"] = 1
 config["targetDeviceUID"] = target_uid
 if "virtualMicrophoneName" not in config or not config["virtualMicrophoneName"]:
     config["virtualMicrophoneName"] = "MicBridge Virtual Mic"

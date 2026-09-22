@@ -1,0 +1,227 @@
+[
+  {
+    "scenario": "recover missing sourceDeviceUID",
+    "seconds": 7.664,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00135416 virtual_rms=0.00135653 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=980f queued_ms=20 underflow=4096 dropped=0 input_callbacks=338 output_callbacks=344 correction_ppm=452 errors=0 last_error=0 input_peak=0.00144466 output_peak=0.00360317 delivered_peak=0.0022022242 delivery_callbacks=335",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:04:24Z"
+    }
+  },
+  {
+    "scenario": "recover missing targetDeviceUID",
+    "seconds": 7.67,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00149358 virtual_rms=0.00144143 virtual_zero_fraction=0.0435\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1489f queued_ms=31 underflow=5632 dropped=0 input_callbacks=352 output_callbacks=360 correction_ppm=463 errors=0 last_error=0 input_peak=0.00301092 output_peak=0.00296308 delivered_peak=0.0019654867 delivery_callbacks=349",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:04:34Z"
+    }
+  },
+  {
+    "scenario": "recover invalid channel",
+    "seconds": 7.725,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.02529310 virtual_rms=0.02515855 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=924f queued_ms=19 underflow=4096 dropped=0 input_callbacks=548 output_callbacks=554 correction_ppm=576 errors=0 last_error=0 input_peak=0.01307380 output_peak=0.01705760 delivered_peak=0.01628087 delivery_callbacks=543",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:04:46Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 1",
+    "seconds": 7.75,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00151560 virtual_rms=0.00150149 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1440f queued_ms=30 underflow=3584 dropped=0 input_callbacks=537 output_callbacks=541 correction_ppm=571 errors=0 last_error=0 input_peak=0.00199583 output_peak=0.00271641 delivered_peak=0.0016143001 delivery_callbacks=533",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:04:56Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 2",
+    "seconds": 8.738,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00216292 virtual_rms=0.00216325 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1448f queued_ms=30 underflow=4608 dropped=0 input_callbacks=509 output_callbacks=515 correction_ppm=560 errors=0 last_error=0 input_peak=0.00414113 output_peak=0.00480118 delivered_peak=0.0049163722 delivery_callbacks=505",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:05:06Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 3",
+    "seconds": 7.656,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00157783 virtual_rms=0.00157097 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=927f queued_ms=19 underflow=5632 dropped=0 input_callbacks=539 output_callbacks=548 correction_ppm=573 errors=0 last_error=0 input_peak=0.00267275 output_peak=0.00474410 delivered_peak=0.003902584 delivery_callbacks=527",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:05:16Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 4",
+    "seconds": 7.663,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00133321 virtual_rms=0.00133474 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1440f queued_ms=30 underflow=4096 dropped=0 input_callbacks=535 output_callbacks=540 correction_ppm=571 errors=0 last_error=0 input_peak=0.00340911 output_peak=0.00298775 delivered_peak=0.001992406 delivery_callbacks=532",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:05:26Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 5",
+    "seconds": 8.416,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00172204 virtual_rms=0.00168963 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1448f queued_ms=30 underflow=4608 dropped=0 input_callbacks=507 output_callbacks=513 correction_ppm=559 errors=0 last_error=0 input_peak=0.00360205 output_peak=0.00205480 delivered_peak=0.002093411 delivery_callbacks=504",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:05:36Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 6",
+    "seconds": 7.786,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00238537 virtual_rms=0.00238713 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=927f queued_ms=19 underflow=3584 dropped=0 input_callbacks=539 output_callbacks=544 correction_ppm=573 errors=0 last_error=0 input_peak=0.00257312 output_peak=0.00239530 delivered_peak=0.0033005695 delivery_callbacks=536",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:05:46Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 7",
+    "seconds": 7.699,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00200863 virtual_rms=0.00200630 virtual_zero_fraction=0.0103\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1489f queued_ms=31 underflow=4096 dropped=0 input_callbacks=354 output_callbacks=359 correction_ppm=465 errors=0 last_error=0 input_peak=0.00237358 output_peak=0.00420851 delivered_peak=0.002826723 delivery_callbacks=350",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:05:54Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 8",
+    "seconds": 7.813,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00311600 virtual_rms=0.00312894 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=925f queued_ms=19 underflow=4608 dropped=0 input_callbacks=546 output_callbacks=553 correction_ppm=576 errors=0 last_error=0 input_peak=0.00246576 output_peak=0.00390063 delivered_peak=0.0041052937 delivery_callbacks=535",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:06:06Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 9",
+    "seconds": 7.895,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00216185 virtual_rms=0.00217050 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=976f queued_ms=20 underflow=6656 dropped=0 input_callbacks=358 output_callbacks=369 correction_ppm=469 errors=0 last_error=0 input_peak=0.00362195 output_peak=0.00319487 delivered_peak=0.0042112647 delivery_callbacks=356",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:06:14Z"
+    }
+  },
+  {
+    "scenario": "disable-enable 10",
+    "seconds": 7.789,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00236107 virtual_rms=0.00237025 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1441f queued_ms=30 underflow=3584 dropped=0 input_callbacks=533 output_callbacks=537 correction_ppm=570 errors=0 last_error=0 input_peak=0.00644874 output_peak=0.00607480 delivered_peak=0.006120341 delivery_callbacks=529",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:06:26Z"
+    }
+  },
+  {
+    "scenario": "SIGHUP",
+    "seconds": 5.969,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00226754 virtual_rms=0.00227884 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=940f queued_ms=20 underflow=3072 dropped=0 input_callbacks=494 output_callbacks=498 correction_ppm=554 errors=0 last_error=0 input_peak=0.00657585 output_peak=0.00277414 delivered_peak=0.003190311 delivery_callbacks=493",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:06:32Z"
+    }
+  },
+  {
+    "scenario": "launchd crash recovery",
+    "seconds": 6.279,
+    "returncode": 0,
+    "output": "[signal] source_rms=0.00254422 virtual_rms=0.00254641 virtual_zero_fraction=0.0000\n[signal] PASS: real microphone signal is present on the virtual input\n",
+    "status": {
+      "channelCount": 1,
+      "message": "Running. input_channel=1 buffer=1487f queued_ms=31 underflow=3072 dropped=0 input_callbacks=362 output_callbacks=365 correction_ppm=471 errors=0 last_error=0 input_peak=0.00280691 output_peak=0.00460409 delivered_peak=0.00522172 delivery_callbacks=360",
+      "sampleRate": 48000,
+      "sourceDeviceUID": "AppleUSBAudioEngine:Audient:Audient iD14:2150000:1,2",
+      "state": "running",
+      "targetDeviceUID": "ch.hefti.micbridge.virtualmic.device",
+      "updatedAtISO8601": "2026-09-21T06:06:36Z"
+    }
+  }
+]

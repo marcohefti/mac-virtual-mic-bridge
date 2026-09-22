@@ -31,9 +31,10 @@
 - Compiles all Swift products in debug and release mode.
 - Runs fixture regression assertions.
 
-3. HAL driver build
-- Executes `scripts/validate-driver-build.sh`.
+3. Native transport and HAL driver build
+- Executes `scripts/validate-transport.sh` (concurrent transfer and three clock drift simulations) and `scripts/validate-driver-build.sh`.
 - Builds `MicBridge.driver` from source (`AudioServerPlugIn`) and verifies signing output.
+- Runs the actual driver implementation in an isolated test process to check stable clock generation across timestamp periods and exact sample copying.
 
 4. Fixture regression checks
 - Executes `micbridge-fixture-validate` assertions against committed fixtures.
@@ -42,11 +43,13 @@
 5. Optional live local stack checks (`--live`)
 - Executes `scripts/validate-live-stack.sh`.
 - Verifies local CoreAudio target visibility and daemon status.
+- Captures physical and virtual input concurrently for three seconds without changing routing. Fails if the physical input has a signal while the virtual input is effectively silent. A silent physical input exits with code 2 as inconclusive, not proof of working audio. Heartbeat freshness is also required.
 
 6. Optional audio waveform integrity check
 - Executes `scripts/validate-audio-e2e.sh`.
 - Injects deterministic tone by device UID and captures by device UID.
 - Verifies that captured waveform is present and sufficiently similar to the reference tone.
+- Uses a five-second signal by default so recurring clock/stream discontinuities cannot hide inside a short successful burst. The default thresholds require correlation ≥ 0.99, normalized waveform error ≤ 0.05, and round-trip latency ≤ 100 ms.
 - This check intentionally does not change global macOS default input/output devices.
 
 7. Optional install/uninstall lifecycle integrity check

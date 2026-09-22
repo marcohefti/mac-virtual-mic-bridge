@@ -12,7 +12,10 @@ ARCHIVE_PATH="$OUT_DIR/$BUNDLE_NAME.tar.gz"
 USER_ID="$(id -u)"
 
 mkdir -p "$OUT_DIR" "$STAGING_DIR"
-mkdir -p "$STAGING_DIR/app-support" "$STAGING_DIR/logs" "$STAGING_DIR/launchd"
+mkdir -p "$STAGING_DIR/app-support" "$STAGING_DIR/logs" "$STAGING_DIR/launchd" "$STAGING_DIR/crashes"
+for crash_report in "$HOME/Library/Logs/DiagnosticReports"/micbridge*(N); do
+  cp "$crash_report" "$STAGING_DIR/crashes/"
+done
 
 copy_if_exists() {
   local src="$1"
@@ -24,6 +27,8 @@ copy_if_exists() {
 
 copy_if_exists "$APP_SUPPORT_DIR/config.json" "$STAGING_DIR/app-support/"
 copy_if_exists "$APP_SUPPORT_DIR/status.json" "$STAGING_DIR/app-support/"
+readlink "$APP_SUPPORT_DIR/bin/current" > "$STAGING_DIR/app-support/runtime-version.txt" || true
+copy_if_exists "$HOME/Library/LaunchAgents/ch.hefti.audio-input-guard.plist" "$STAGING_DIR/launchd/"
 copy_if_exists "$APP_SUPPORT_DIR/daemon.pid" "$STAGING_DIR/app-support/"
 
 if [[ -d "$LOG_DIR" ]]; then

@@ -3,6 +3,11 @@ import BridgeCore
 import Darwin
 import Foundation
 
+// Keep the badge decorative so clicks still reach the status item's menu.
+private final class StatusBadgeView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 final class MenuBarController: NSObject, NSApplicationDelegate {
     private enum SelectedInputAvailability {
         case automatic
@@ -19,6 +24,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private var inputDevices: [AudioDevice] = []
 
     private var statusItem: NSStatusItem!
+    private let statusBadge = StatusBadgeView()
     private var refreshTimer: Timer?
     private var repoRoot: URL?
     private var currentVersion: String = "0.0.0-dev"
@@ -77,22 +83,29 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         let status = statusStore.load()
         let inputAvailability = selectedInputAvailability()
         updateStatusItemAppearance(
-            daemonState: status?.state,
+            daemonState: status?.isFresh == true ? status?.state : .error,
             bridgeEnabled: config.enabled,
             inputAvailability: inputAvailability
         )
 
-        let routeItem = NSMenuItem(
-            title: "\(currentInputName()) -> \(config.virtualMicrophoneName)",
-            action: nil,
-            keyEquivalent: ""
-        )
-        routeItem.isEnabled = false
-        menu.addItem(routeItem)
-
-        let selectedInputStatusItem = NSMenuItem(title: selectedInputStatusText(inputAvailability), action: nil, keyEquivalent: "")
-        selectedInputStatusItem.isEnabled = false
-        menu.addItem(selectedInputStatusItem)
+        let summary = NSMenuItem()
+        let header = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 68))
+        let lines = [
+            "\(bridgeSummary(status)) · \(currentInputName())",
+            interfaceSummary(inputAvailability),
+            deliverySummary(status)
+        ]
+        for (index, text) in lines.enumerated() {
+            let label = NSTextField(labelWithString: text)
+            label.frame = NSRect(x: 14, y: 46 - index * 20, width: 292, height: 18)
+            label.font = index == 0 ? .boldSystemFont(ofSize: 13) : .systemFont(ofSize: 12)
+            label.textColor = .labelColor
+            label.lineBreakMode = .byTruncatingTail
+            label.toolTip = text
+            header.addSubview(label)
+        }
+        summary.view = header
+        menu.addItem(summary)
 
         menu.addItem(.separator())
 
@@ -113,6 +126,44 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         menu.setSubmenu(inputMenu, for: inputParent)
         menu.addItem(inputParent)
 
+        let channelMenu = NSMenu(title: "Microphone Channel")
+        let selectedUID = config.sourceDeviceUID ?? status?.sourceDeviceUID
+        if let device = inputDevices.first(where: { $0.uid == selectedUID }) {
+            for channel in 1...device.inputChannels {
+                let item = NSMenuItem(title: "\(channel): \(CoreAudioDeviceRegistry.inputChannelName(deviceID: device.id, channel: channel))", action: #selector(selectInputChannel(_:)), keyEquivalent: "")
+                item.target = self
+                item.tag = channel
+                item.state = channel == config.sourceInputChannel ? .on : .off
+                channelMenu.addItem(item)
+            }
+        } else {
+            let item = NSMenuItem(title: "Input \(config.sourceInputChannel) (device unavailable)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            channelMenu.addItem(item)
+        }
+        let channelParent = NSMenuItem(title: "Microphone Channel", action: nil, keyEquivalent: "")
+        menu.setSubmenu(channelMenu, for: channelParent)
+        menu.addItem(channelParent)
+        let identify = NSMenuItem(title: "Identify Microphone Channel…", action: #selector(identifyChannel), keyEquivalent: "")
+        identify.target = self; menu.addItem(identify)
+        let toggle = NSMenuItem(title: config.enabled ? "Stop Bridge" : "Start Bridge", action: #selector(toggleBridge), keyEquivalent: "")
+        toggle.target = self; menu.addItem(toggle)
+        let restart = NSMenuItem(title: "Restart Audio", action: #selector(restartAudio), keyEquivalent: "")
+        restart.target = self; menu.addItem(restart)
+        let diagnosticsMenu = NSMenu(title: "Diagnostics")
+        for (title, action) in [
+            ("View Diagnostics…", #selector(showDiagnostics)),
+            ("Copy Diagnostics", #selector(copyDiagnostics)),
+            ("Open Logs", #selector(openLogs))
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            diagnosticsMenu.addItem(item)
+        }
+        let diagnostics = NSMenuItem(title: "Diagnostics", action: nil, keyEquivalent: "")
+        diagnostics.submenu = diagnosticsMenu
+        menu.addItem(diagnostics)
+
         menu.addItem(.separator())
 
         let updatesItem = NSMenuItem(title: updateState.checkActionTitle, action: #selector(checkForUpdates), keyEquivalent: "")
@@ -130,18 +181,158 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit Menu (Bridge Keeps Running)", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
         statusItem.menu = menu
     }
 
+    private func bridgeSummary(_ status: BridgeStatus?) -> String {
+        guard config.enabled else { return "Disabled" }
+        guard let status, status.isFresh else { return "Status unavailable" }
+        switch status.state {
+        case .running: return "Running"
+        case .starting: return "Starting"
+        case .restarting: return "Reconnecting"
+        case .stopped: return "Stopped"
+        case .error: return "Needs attention"
+        }
+    }
+
+    private func interfaceSummary(_ availability: SelectedInputAvailability) -> String {
+        switch availability {
+        case .automatic: return "Interface: automatic selection"
+        case .online: return "Interface: connected"
+        case .offline: return "Interface: disconnected · waiting for reconnect"
+        }
+    }
+
+    private func deliverySummary(_ status: BridgeStatus?) -> String {
+        guard config.enabled, let status, status.isFresh, status.state == .running else {
+            return "Virtual mic: delivery not confirmed"
+        }
+        // This is the daemon's virtual-input monitor, not the receiving app's state.
+        let peak = status.message.split(separator: " ").first { $0.hasPrefix("delivered_peak=") }
+            .flatMap { Double($0.dropFirst("delivered_peak=".count)) }
+        guard let peak else { return "Virtual mic: delivery not confirmed" }
+        return peak > 0 ? "Virtual mic: signal detected" : "Virtual mic: quiet · no signal detected"
+    }
+
+    private func diagnosticsText() -> String {
+        let status = statusStore.load()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let statusJSON = status.flatMap { try? encoder.encode($0) }
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "Unavailable"
+        let configJSON = (try? encoder.encode(config))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "Unavailable"
+        return """
+        MicBridge \(currentVersion)
+        Captured: \(ISO8601DateFormatter().string(from: Date()))
+        Status: \(bridgeSummary(status))
+        Route: \(currentInputName()) → \(config.virtualMicrophoneName)
+        \(interfaceSummary(selectedInputAvailability()))
+        \(deliverySummary(status))
+
+        Underflow and dropped-frame counters are cumulative for the current transport;
+        a nonzero total alone does not indicate a current fault.
+        Signal detection confirms the virtual-input monitor, not Discord or another app.
+
+        Status snapshot:
+        \(statusJSON)
+
+        Configuration:
+        \(configJSON)
+
+        Logs: \(BridgePaths.logsDir.path)
+        """
+    }
+
+    @objc private func copyDiagnostics() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(diagnosticsText(), forType: .string)
+    }
+
+    @objc private func openLogs() {
+        NSWorkspace.shared.open(BridgePaths.logsDir)
+    }
+
+    @objc private func showDiagnostics() {
+        let snapshot = diagnosticsText()
+        let alert = NSAlert()
+        alert.messageText = "MicBridge Diagnostics"
+        alert.informativeText = "A snapshot of the bridge and its cumulative counters."
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 560, height: 320))
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        let text = NSTextView(frame: scroll.bounds)
+        text.isEditable = false
+        text.isSelectable = true
+        text.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        text.string = snapshot
+        text.isVerticallyResizable = true
+        text.isHorizontallyResizable = false
+        text.autoresizingMask = [.width]
+        text.textContainer?.containerSize = NSSize(width: 540, height: CGFloat.greatestFiniteMagnitude)
+        text.textContainer?.widthTracksTextView = true
+        scroll.documentView = text
+        alert.accessoryView = scroll
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Copy Diagnostics")
+        if alert.runModal() == .alertSecondButtonReturn {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(snapshot, forType: .string)
+        }
+    }
+
     @objc private func selectInputDevice(_ sender: NSMenuItem) {
         guard inputDevices.indices.contains(sender.tag) else { return }
-        config.sourceDeviceUID = inputDevices[sender.tag].uid
+        let uid = inputDevices[sender.tag].uid
+        if uid != config.sourceDeviceUID {
+            if let oldUID = config.sourceDeviceUID { config.sourceChannelSelections[oldUID] = config.sourceInputChannel }
+            let remembered = config.sourceChannelSelections[uid] ?? 1
+            config.sourceInputChannel = min(max(1, remembered), inputDevices[sender.tag].inputChannels)
+        }
+        config.sourceDeviceUID = uid
         persistConfigAndSignalDaemon()
         rebuildMenu()
+    }
+
+    @objc private func selectInputChannel(_ sender: NSMenuItem) {
+        config.sourceInputChannel = sender.tag
+        if let uid = config.sourceDeviceUID { config.sourceChannelSelections[uid] = sender.tag }
+        persistConfigAndSignalDaemon()
+        rebuildMenu()
+    }
+
+    @objc private func toggleBridge() {
+        config.enabled.toggle(); persistConfigAndSignalDaemon(); rebuildMenu()
+    }
+    @objc private func restartAudio() { persistConfigAndSignalDaemon() }
+    @objc private func identifyChannel() {
+        let alert = NSAlert()
+        alert.messageText = "Identify microphone channel"
+        alert.informativeText = "After clicking Start, speak for five seconds. Signal levels are measured locally; no recording is saved. Channel selection will not change automatically."
+        alert.addButton(withTitle: "Start"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let executable = BridgePaths.appSupportDir.appendingPathComponent("bin/current/micbridge-audio-e2e-validate")
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process(); let pipe = Pipe()
+            process.executableURL = executable; process.arguments = ["--identify-channels"]
+            process.standardOutput = pipe; process.standardError = pipe
+            let result: String
+            do {
+                try process.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                result = String(data: data, encoding: .utf8) ?? "No result"
+            } catch { result = "Channel check failed: \(error)" }
+            DispatchQueue.main.async {
+                let resultAlert = NSAlert(); resultAlert.messageText = "Input channel activity"
+                resultAlert.informativeText = result; resultAlert.runModal()
+            }
+        }
     }
 
     @objc private func checkForUpdates() {
@@ -182,7 +373,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         case .automatic:
             return "Auto Input"
         case let .online(name):
-            return name
+            return "\(name) · Input \(config.sourceInputChannel)"
         case .offline:
             return "Unavailable Input"
         }
@@ -241,37 +432,57 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     ) {
         guard let button = statusItem.button else { return }
 
-        let indicator: String
         let tooltip: String
+        let badgeColor: NSColor
         if bridgeEnabled, case .offline = inputAvailability {
-            indicator = "🔴"
+            badgeColor = .systemOrange
             tooltip = "MicBridge: Selected input offline (waiting for reconnect)"
         } else {
             switch daemonState {
             case .running where bridgeEnabled:
-                indicator = "🟢"
+                badgeColor = .systemGreen
                 tooltip = "MicBridge: Running"
             case .running:
-                indicator = "⚪"
+                badgeColor = .systemRed
                 tooltip = "MicBridge: Running (Bridge Disabled)"
             case .starting, .restarting:
-                indicator = "🟡"
+                badgeColor = .systemOrange
                 tooltip = "MicBridge: Recovering"
             case .error:
-                indicator = "🔴"
+                badgeColor = .systemRed
                 tooltip = "MicBridge: Error"
             case .stopped:
-                indicator = "⚪"
+                badgeColor = .systemRed
                 tooltip = "MicBridge: Stopped"
             case .none:
-                indicator = "⚪"
+                badgeColor = .systemRed
                 tooltip = "MicBridge: Unknown"
             }
         }
 
-        button.image = nil
-        button.title = indicator
+        button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "MicBridge microphone")
+        button.image?.isTemplate = true
+        button.imagePosition = .imageOnly
+        button.title = ""
+        button.setAccessibilityLabel("MicBridge — \(tooltip)")
         button.toolTip = tooltip
+
+        // Overlay a colored badge while leaving the microphone a template image,
+        // so macOS still renders it correctly on light/dark and highlighted menus.
+        if statusBadge.superview == nil {
+            statusBadge.translatesAutoresizingMaskIntoConstraints = false
+            statusBadge.wantsLayer = true
+            statusBadge.layer?.cornerRadius = 2.5
+            statusBadge.setAccessibilityElement(false)
+            button.addSubview(statusBadge)
+            NSLayoutConstraint.activate([
+                statusBadge.widthAnchor.constraint(equalToConstant: 5),
+                statusBadge.heightAnchor.constraint(equalToConstant: 5),
+                statusBadge.centerXAnchor.constraint(equalTo: button.centerXAnchor, constant: 6),
+                statusBadge.topAnchor.constraint(equalTo: button.topAnchor, constant: 2)
+            ])
+        }
+        statusBadge.layer?.backgroundColor = badgeColor.cgColor
     }
 
     private func configureUpdateService() {

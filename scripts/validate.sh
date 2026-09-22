@@ -38,6 +38,9 @@ zsh -n .githooks/pre-commit
 echo "[validate] Swift validation"
 run_and_log "swift validation" ./scripts/validate-swift.sh
 
+echo "[validate] Concurrent transport and clock drift validation"
+run_and_log "transport validation" ./scripts/validate-transport.sh
+
 echo "[validate] Driver build validation"
 run_and_log "driver build validation" ./scripts/validate-driver-build.sh
 
